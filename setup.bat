@@ -64,6 +64,15 @@ exit /b
 if exist "setup.py" (
     echo Running setup script...
     echo =====================
+    echo This will install all required dependencies including:
+    echo - Nmap for network scanning
+    echo - Metasploit Framework for exploitation
+    echo - Python packages: scapy, python-nmap, requests
+    echo.
+    echo The installation may take several minutes, especially for Metasploit.
+    echo Please be patient and do not close this window.
+    echo.
+    pause
     %PYTHON_CMD% setup.py
 ) else (
     echo Error: setup.py not found!

@@ -45,20 +45,23 @@ class MetasploitInterface:
             else:
                 msfconsole_name = 'msfconsole'
             
+            # First check if it's in PATH
             msfconsole_path = shutil.which(msfconsole_name)
             if msfconsole_path:
                 self.msf_path = msfconsole_path
-                print(f"[+] Metasploit found: {msfconsole_path}")
+                print(f"[+] Metasploit found in PATH: {msfconsole_path}")
                 self.is_connected = True
                 return True
             
             # Try common installation paths
             system = platform.system().lower()
             if system == 'windows':
+                # Check common Windows installation paths
                 common_paths = [
-                    'C:\\Program Files\\metasploit-framework\\bin\\msfconsole.bat',
                     'C:\\metasploit-framework\\bin\\msfconsole.bat',
-                    'C:\\Program Files (x86)\\metasploit-framework\\bin\\msfconsole.bat'
+                    'C:\\Program Files\\metasploit-framework\\bin\\msfconsole.bat',
+                    'C:\\Program Files (x86)\\metasploit-framework\\bin\\msfconsole.bat',
+                    'C:\\Tools\\metasploit-framework\\bin\\msfconsole.bat'
                 ]
             else:
                 common_paths = [
@@ -74,6 +77,28 @@ class MetasploitInterface:
                     self.is_connected = True
                     return True
             
+            # On Windows, also check if it might be installed but not in PATH
+            if system == 'windows':
+                # Try to find it using Windows registry or other methods
+                try:
+                    # Check if the directory exists
+                    possible_paths = [
+                        'C:\\metasploit-framework',
+                        'C:\\Program Files\\metasploit-framework',
+                        'C:\\Program Files (x86)\\metasploit-framework',
+                        'C:\\Tools\\metasploit-framework'
+                    ]
+                    
+                    for base_path in possible_paths:
+                        msf_path = os.path.join(base_path, 'bin', 'msfconsole.bat')
+                        if os.path.exists(msf_path):
+                            self.msf_path = msf_path
+                            print(f"[+] Metasploit found: {msf_path}")
+                            self.is_connected = True
+                            return True
+                except Exception:
+                    pass
+            
             print("[-] Metasploit Framework not found.")
             print_info("Metasploit Framework is REQUIRED for exploit functionality.")
             print_info("")
@@ -82,9 +107,9 @@ class MetasploitInterface:
             if system == 'windows':
                 print_info("  Windows:")
                 print_info("    1. Download the official installer from: https://www.metasploit.com/download/")
-                print_info("    2. Or clone the repository: https://github.com/rapid7/metasploit-framework")
-                print_info("    3. Follow the Windows installation guide")
-                print_info("    4. Make sure 'msfconsole.bat' is in your PATH")
+                print_info("    2. Or install via Chocolatey: choco install metasploit")
+                print_info("    3. Make sure 'msfconsole.bat' is in your PATH")
+                print_info("    4. If installed but not in PATH, add the bin directory to your system PATH")
             elif system == 'darwin':  # macOS
                 print_info("  macOS:")
                 print_info("    1. Install Homebrew if not already installed")
@@ -93,7 +118,7 @@ class MetasploitInterface:
             else:  # Linux
                 print_info("  Linux:")
                 print_info("    1. Follow the official installation guide at: https://docs.metasploit.com/docs/using-metasploit/getting-started/setup.html")
-                print_info("    2. Or use the quick install script: curl https://raw.githubusercontent.com/rapid7/metasploit-framework/master/scripts/install-metasploit.sh | bash")
+                print_info("    2. Or use the quick install script: curl https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > msfinstall && chmod 755 msfinstall && ./msfinstall")
             
             print_info("")
             print_info("After installation, restart your terminal/command prompt and run this tool again.")

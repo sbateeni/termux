@@ -285,6 +285,7 @@ class NetworkSecurityToolkit:
             print_error(f"Unexpected error installing Python packages: {e}")
             
         print_success("Dependency setup completed!")
+        print_info("Please restart your terminal/command prompt to ensure all changes take effect.")
         input("Press Enter to continue...")
 
     def _install_metasploit_windows_official(self):
@@ -349,7 +350,10 @@ Write-Host "Installation completed."
             if result.returncode == 0:
                 print_success("Metasploit installed successfully using official installer")
                 print_info("The installation location is: C:\\metasploit-framework")
-                print_info("Make sure C:\\metasploit-framework\\bin is in your PATH")
+                print_info("Please add C:\\metasploit-framework\\bin to your system PATH manually if it's not already there:")
+                print_info("1. Open System Properties -> Advanced -> Environment Variables")
+                print_info("2. Edit the PATH variable and add: C:\\metasploit-framework\\bin")
+                print_info("3. Restart your terminal/command prompt")
             else:
                 print_error(f"Failed to install Metasploit: {result.stderr}")
                 print_info("Please install Metasploit manually from: https://www.metasploit.com/download/")
@@ -576,6 +580,8 @@ Write-Host "Installation completed."
                 print_error("Metasploit is not installed or not in PATH")
                 print_info("Please install Metasploit and ensure it's in your system PATH")
                 print_info("On Termux, use: curl -fsSL https://kutt.it/msf | bash")
+                print_info("On Windows, you may need to add Metasploit to your PATH manually")
+                print_info("After installation, restart your terminal/command prompt")
                 input("Press Enter to continue...")
                 return
             
@@ -660,6 +666,8 @@ Write-Host "Installation completed."
                 print_error("Metasploit is not installed or not in PATH")
                 print_info("Please install Metasploit and ensure it's in your system PATH")
                 print_info("On Termux, use: curl -fsSL https://kutt.it/msf | bash")
+                print_info("On Windows, you may need to add Metasploit to your PATH manually")
+                print_info("After installation, restart your terminal/command prompt")
                 input("Press Enter to continue...")
                 return
             

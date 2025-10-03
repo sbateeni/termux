@@ -1,113 +1,162 @@
 # Network Security Testing Toolkit
 
-## ⚠️ IMPORTANT DISCLAIMER
-
-This toolkit is for **educational and authorized security testing purposes only**. 
-Only use on networks you own or have explicit permission to test. Unauthorized 
-network scanning or penetration testing may be illegal.
-
-**WARNING**: This toolkit performs real network scans and genuine exploit testing 
-using the Metasploit Framework. It can potentially disrupt target systems or 
-networks. Ensure you understand the implications and have proper authorization 
-before use.
-
-## Overview
-
-A comprehensive Python-based network security testing toolkit that provides the following capabilities:
-
-1. **Network Discovery**: Scan local network to discover connected devices and retrieve their IP and MAC addresses
-2. **Target Selection**: Interactive interface to select target devices from discovered network devices
-3. **Port Scanning**: Scan open ports on selected targets to identify running services
-4. **Exploit Search**: Search for potential exploits matching discovered services using Metasploit integration
-5. **Exploit Testing**: Run vulnerability checks and generate exploit scripts
+A comprehensive Python-based toolkit for network security testing and penetration testing. This toolkit provides functionality for network discovery, port scanning, and Metasploit integration for vulnerability exploitation.
 
 ## Features
 
-- Modular design for easy maintenance and extension
-- Multi-threaded scanning for improved performance
-- Interactive command-line interface
-- Detailed reporting and result saving
-- **Real Metasploit Framework integration** for genuine exploit testing
-- **Enhanced network scanning** using multiple detection methods
-- **Automated exploit testing** - tries all exploits until one succeeds
-- **Detailed exploit information** retrieval from Metasploit
-- **Real exploit execution** with safety confirmation prompts
-- **Organized exploit script management** in dedicated exploit directory
-- **Automatic selection** of most recent exploit script
-- **Cross-platform automatic setup** for all environments (Windows, Linux, macOS, Termux)
-- **Standalone setup script** for easy deployment
-- Configurable settings
+- **Network Discovery**: Scan and identify devices on your local network with IP and MAC addresses
+- **Target Selection**: Interactive target selection with manual IP entry option
+- **Port Scanning**: Multi-threaded port scanning with service detection
+- **Metasploit Integration**: Full integration with Metasploit Framework for vulnerability exploitation
+- **Automated Exploitation**: Automated exploit testing that tries all exploits until one succeeds
+- **Cross-Platform**: Works on Windows, Linux, macOS, and Termux (Android)
+- **Automatic Setup**: One-click dependency installation across all platforms
 
-## Requirements
+## Prerequisites
 
-- Python 3.6 or higher
-- **Metasploit Framework (REQUIRED for exploit functionality)**
-  - **Windows**: Download from https://www.metasploit.com/download/ or clone from GitHub
-  - **Linux/macOS**: Follow official installation guide at https://docs.metasploit.com/docs/using-metasploit/getting-started/setup.html
-  - Ensure `msfconsole` is in your PATH after installation
-- Windows, macOS, or Linux operating system (including Termux on Android)
-- Administrative privileges for network scanning (Windows) or sudo access (Linux/macOS)
-
-## Automatic Setup
-
-The toolkit includes an automatic setup feature that can install most required dependencies:
-
-- **Option 8** in the main menu
-- **Standalone setup script**: `python setup.py`
-- Supports Windows, Linux, macOS, and Termux environments
-- Automatically detects package managers (Chocolatey, Homebrew, apt, yum, dnf, pacman)
-
-**Note**: Metasploit Framework must be installed manually as it requires additional setup steps beyond package management.
+- Python 3.6 or later
+- Administrative privileges (on Windows for full functionality)
+- Internet connection for initial setup
 
 ## Installation
 
-1. Clone or download this repository:
-   ```
-   git clone <repository-url>
-   cd termux
-   ```
+### Automated Installation (Recommended)
 
-2. Install required Python packages:
-   ```
-   pip install -r requirements.txt
-   ```
+1. Clone or download this repository
+2. Run the setup script:
+   - **Windows**: Double-click `setup.bat` or run `python setup.py`
+   - **Linux/macOS/Termux**: Run `python setup.py`
 
-3. (Optional) Install Metasploit Framework for full exploit functionality:
-   - Visit https://www.metasploit.com/ for installation instructions
+### Manual Installation
+
+Install required system dependencies:
+
+#### Windows
+```bash
+# Install via Chocolatey (run as Administrator)
+choco install nmap metasploit
+
+# Or download from official sources
+# Nmap: https://nmap.org/download.html
+# Metasploit: https://www.metasploit.com/download/
+```
+
+#### Linux (Ubuntu/Debian)
+```bash
+sudo apt update
+sudo apt install nmap metasploit-framework
+```
+
+#### macOS
+```bash
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install dependencies
+brew install nmap metasploit
+```
+
+#### Termux (Android)
+```bash
+pkg update
+pkg install nmap
+curl -fsSL https://kutt.it/msf | bash
+```
+
+### Python Dependencies
+
+Install Python packages:
+```bash
+pip install -r requirements.txt
+```
+
+Or run the setup script which will automatically install them.
 
 ## Usage
 
-Run the main toolkit:
-```
-python main.py
-```
+### Quick Start
 
-Follow the interactive menu to:
-1. Discover network devices
-2. Select a target
-3. Scan target ports
-4. Search for exploits
-5. Run exploit checks
+1. **Run the toolkit**:
+   - **Windows**: Double-click `run.bat` or run `python main.py`
+   - **Linux/macOS/Termux**: Run `python main.py`
 
-## Modules
+2. **Follow the menu options**:
+   - Option 1: Scan network for connected devices
+   - Option 2: Select target (with manual IP entry option)
+   - Option 3: Scan ports on selected target
+   - Option 4: Run automated exploits
+   - Option 5: Run single exploit
+   - Option 8: Setup/Install dependencies
 
-- `main.py` - Main controller orchestrating all modules
-- `network_scanner.py` - Network device discovery
-- `target_selector.py` - Target selection interface
-- `port_scanner.py` - Port scanning functionality
-- `metasploit_interface.py` - Metasploit integration
-- `config.py` - Configuration management
-- `utils.py` - Utility functions
-- `requirements.txt` - Python package dependencies
+### Detailed Usage
 
-## Legal Notice
+#### Network Scanning
+The toolkit will automatically detect your local network range and scan for connected devices, showing IP addresses, MAC addresses, and hostnames.
 
-This toolkit is provided for educational purposes only. The authors are not responsible for any misuse or damage caused by this tool. Always ensure you have proper authorization before testing any network or system.
+#### Target Selection
+You can either select from discovered devices or manually enter an IP address:
+- Enter device number from the list
+- Enter 'm' for manual IP entry
+- Enter IP address directly (e.g., 192.168.1.100)
 
-## Contributing
+#### Port Scanning
+The toolkit scans common ports to identify open services on the target system.
 
-Contributions are welcome! Please fork the repository and submit pull requests with improvements.
+#### Metasploit Exploitation
+The toolkit integrates with Metasploit to:
+- Search for exploits matching target services
+- Check if targets are vulnerable
+- Generate and execute exploit scripts
+- Run automated exploitation until one succeeds
+
+## Platform-Specific Notes
+
+### Windows
+- Must be run as Administrator for full functionality
+- Metasploit installation may require manual PATH configuration
+- If Metasploit fails to install via setup, use the included `install_metasploit.bat` script
+
+### Termux
+- Some network scanning features may be limited due to Android restrictions
+- Metasploit installation uses the gushmazuko automated script
+- Ensure Termux has storage permissions: `termux-setup-storage`
+
+### Linux/macOS
+- Standard installation via package managers
+- May require sudo privileges for network scanning
+
+## Troubleshooting
+
+### Metasploit Not Found
+If Metasploit is not detected:
+1. Ensure it's properly installed
+2. Verify it's in your system PATH
+3. On Windows, you may need to manually add the Metasploit bin directory to PATH
+4. Restart your terminal/command prompt after installation
+
+### Network Scanning Issues
+- On Termux, network scanning may be limited
+- Try using nmap directly: `nmap -sn your_network_range`
+- Ensure you have proper network permissions
+
+### Permission Errors
+- Windows: Run as Administrator
+- Linux/macOS/Termux: May require sudo privileges
+
+## Security Notice
+
+This toolkit is intended for ethical hacking and security research purposes only. Only use it on systems and networks you own or have explicit permission to test. Unauthorized use may be illegal and could result in serious consequences.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! Please fork the repository and submit pull requests.
+
+## Acknowledgments
+
+- [Metasploit Framework](https://www.metasploit.com/)
+- [Nmap](https://nmap.org/)
+- [Scapy](https://scapy.net/)

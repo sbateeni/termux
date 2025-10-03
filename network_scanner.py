@@ -137,6 +137,19 @@ class NetworkScanner:
                 except Exception:
                     pass
                     
+                # Try parsing the ARP cache directly
+                try:
+                    with open('/proc/net/arp', 'r') as f:
+                        lines = f.readlines()
+                        for line in lines[1:]:  # Skip header
+                            parts = line.split()
+                            if len(parts) >= 4 and parts[0] == ip:
+                                mac = parts[3]
+                                if mac != '00:00:00:00:00:00':
+                                    return mac.upper()
+                except Exception:
+                    pass
+                    
                 return None
             
             # Method 1: Use arp command to get MAC address (non-Termux)
@@ -272,7 +285,7 @@ class NetworkScanner:
                 print("[-] Falling back to basic ping scan...")
                 return self._basic_ping_scan()
             
-            # Run nmap scan
+            # Run nmap scan with ping scan option (-sn)
             result = subprocess.run(
                 ["nmap", "-sn", self.network_range],
                 capture_output=True,
@@ -284,27 +297,22 @@ class NetworkScanner:
                 # Parse nmap output
                 lines = result.stdout.strip().split('\n')
                 current_ip = None
+                hostname = "Unknown"
                 
                 for line in lines:
                     # Look for IP addresses
                     ip_match = re.search(r'Nmap scan report for ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)', line)
                     if ip_match:
                         current_ip = ip_match.group(1)
+                        # Try to get hostname if available
+                        hostname_match = re.search(r'Nmap scan report for ([^\s]+) \(', line)
+                        hostname = hostname_match.group(1) if hostname_match else "Unknown"
                         continue
-                    
-                    # Look for MAC addresses
-                    if current_ip and 'MAC Address:' in line:
+                    elif current_ip and 'MAC Address:' in line:
                         mac_match = re.search(r'MAC Address: ([0-9A-F:]+)', line)
                         if mac_match:
                             mac = mac_match.group(1)
-                            hostname = "Unknown"  # nmap doesn't always provide hostname in this format
-                            
-                            # Try to get hostname
-                            try:
-                                hostname = socket.gethostbyaddr(current_ip)[0]
-                            except Exception:
-                                pass
-                            
+                            # Add device to list
                             self.devices.append({
                                 'ip': current_ip,
                                 'mac': mac,
@@ -312,6 +320,57 @@ class NetworkScanner:
                                 'status': 'alive'
                             })
                             current_ip = None
+                            hostname = "Unknown"
+                    elif current_ip and line.strip() == "":
+                        # If we reach an empty line and haven't found MAC yet, 
+                        # add the device with unknown MAC
+                        if not any(d['ip'] == current_ip for d in self.devices):
+                            self.devices.append({
+                                'ip': current_ip,
+                                'mac': 'Unknown',
+                                'hostname': hostname,
+                                'status': 'alive'
+                            })
+                        current_ip = None
+                        hostname = "Unknown"
+            
+            # If no devices found with the above method, try a different parsing approach
+            if not self.devices:
+                # Alternative parsing for different nmap output formats
+                ip_pattern = r'Nmap scan report for ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)'
+                mac_pattern = r'MAC Address: ([0-9A-Fa-f:]+)'
+                
+                i = 0
+                lines = result.stdout.strip().split('\n')
+                while i < len(lines):
+                    line = lines[i]
+                    ip_match = re.search(ip_pattern, line)
+                    if ip_match:
+                        ip = ip_match.group(1)
+                        hostname = "Unknown"
+                        
+                        # Look for hostname in the same line
+                        hostname_match = re.search(r'Nmap scan report for ([^\s]+) \(', line)
+                        if hostname_match:
+                            hostname = hostname_match.group(1)
+                        
+                        # Look for MAC address in the following lines
+                        mac = "Unknown"
+                        j = i + 1
+                        while j < min(i + 5, len(lines)):  # Check next 5 lines
+                            mac_match = re.search(mac_pattern, lines[j])
+                            if mac_match:
+                                mac = mac_match.group(1)
+                                break
+                            j += 1
+                        
+                        self.devices.append({
+                            'ip': ip,
+                            'mac': mac,
+                            'hostname': hostname,
+                            'status': 'alive'
+                        })
+                    i += 1
             
             # Sort devices by IP
             self.devices.sort(key=lambda x: socket.inet_aton(x['ip']))

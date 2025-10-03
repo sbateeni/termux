@@ -94,7 +94,8 @@ class TargetSelector:
         """
         if not self.devices:
             print("[-] No devices available for selection")
-            return None
+            # Even if no devices were discovered, allow manual IP entry
+            return self._select_target_manual()
         
         while True:
             self.display_targets()
@@ -102,6 +103,7 @@ class TargetSelector:
             print("    Enter device number (1-{})".format(len(self.devices)))
             print("    Enter 'q' to quit")
             print("    Enter 'r' to refresh device list")
+            print("    Enter 'm' to manually enter IP address")
             print("    Enter IP address directly")
             
             try:
@@ -111,6 +113,10 @@ class TargetSelector:
                 if choice.lower() == 'q':
                     print("[*] Target selection cancelled")
                     return None
+                
+                # Manual IP entry option
+                if choice.lower() == 'm':
+                    return self._select_target_manual()
                 
                 # Refresh option
                 if choice.lower() == 'r':
@@ -125,8 +131,14 @@ class TargetSelector:
                         print(f"[+] Target selected: {target['ip']} ({target['hostname']})")
                         return target
                     else:
-                        print(f"[-] IP {choice} not found in discovered devices")
-                        continue
+                        # IP not in discovered devices, but still valid
+                        print(f"[+] Manual target selected: {choice}")
+                        return {
+                            'ip': choice,
+                            'mac': 'Unknown',
+                            'hostname': 'Manually Entered',
+                            'status': 'unknown'
+                        }
                 
                 # Check if input is a device number
                 device_num = int(choice)
@@ -143,7 +155,44 @@ class TargetSelector:
             except KeyboardInterrupt:
                 print("\n[*] Target selection cancelled")
                 return None
-    
+
+    def _select_target_manual(self) -> Optional[Dict]:
+        """
+        Allow user to manually enter an IP address.
+        
+        Returns:
+            Device dictionary with manually entered IP or None if cancelled
+        """
+        print("\n[*] Manual IP Entry")
+        print("="*30)
+        print("Enter IP address manually")
+        print("Enter 'q' to quit")
+        
+        while True:
+            try:
+                ip_input = input("\n[?] Enter target IP address: ").strip()
+                
+                # Quit option
+                if ip_input.lower() == 'q':
+                    print("[*] Manual IP entry cancelled")
+                    return None
+                
+                # Validate IP address
+                if self._is_valid_ip(ip_input):
+                    print(f"[+] Manual target selected: {ip_input}")
+                    return {
+                        'ip': ip_input,
+                        'mac': 'Unknown',
+                        'hostname': 'Manually Entered',
+                        'status': 'unknown'
+                    }
+                else:
+                    print("[-] Invalid IP address format. Please try again.")
+                    print("    Example: 192.168.1.100")
+            except KeyboardInterrupt:
+                print("\n[*] Manual IP entry cancelled")
+                return None
+
     def select_target_by_ip(self, ip: str) -> Optional[Dict]:
         """
         Select target by IP address.
@@ -225,7 +274,7 @@ class TargetSelector:
         print(f"Status:        {target['status']}")
         print("="*60)
     
-    def filter_devices(self, filter_type: str = None) -> List[Dict]:
+    def filter_devices(self, filter_type: Optional[str] = None) -> List[Dict]:
         """
         Filter devices by type.
         

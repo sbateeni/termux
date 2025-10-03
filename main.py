@@ -114,7 +114,7 @@ class NetworkSecurityToolkit:
                     except Exception as e:
                         print_error(f"Error with Nmap: {e}")
                     
-                    # Install/update Metasploit automatically
+                    # Install/update Metasploit automatically using official installer
                     print_info("Installing/Updating Metasploit...")
                     try:
                         # First, try to install via Chocolatey
@@ -125,16 +125,16 @@ class NetworkSecurityToolkit:
                         if result.returncode == 0:
                             print_success("Metasploit installed/updated successfully via Chocolatey")
                         else:
-                            print_warning("Chocolatey installation failed, trying alternative method...")
-                            # Alternative method: Download and install Metasploit directly
-                            self._install_metasploit_windows()
+                            print_warning("Chocolatey installation failed, trying official installer...")
+                            # Alternative method: Download and install Metasploit directly using official method
+                            self._install_metasploit_windows_official()
                     except Exception as e:
                         print_error(f"Error with Metasploit installation: {e}")
                         print_info("Trying alternative installation method...")
-                        self._install_metasploit_windows()
+                        self._install_metasploit_windows_official()
                 else:
                     print_warning("Chocolatey not available. Please install Nmap and Metasploit manually.")
-                    self._install_metasploit_windows()
+                    self._install_metasploit_windows_official()
                     
             except Exception as e:
                 print_error(f"Error during Windows setup: {e}")
@@ -287,42 +287,72 @@ class NetworkSecurityToolkit:
         print_success("Dependency setup completed!")
         input("Press Enter to continue...")
 
-    def _install_metasploit_windows(self):
-        """Install Metasploit on Windows using the official installer"""
+    def _install_metasploit_windows_official(self):
+        """Install Metasploit on Windows using the official nightly installer"""
         try:
             import platform
-            import urllib.request
             import tempfile
             import os
             
-            print_info("Attempting to download and install Metasploit automatically...")
+            print_info("Attempting to download and install Metasploit using official installer...")
             
-            # Check system architecture
-            arch = platform.machine().lower()
-            is_64bit = arch in ['amd64', 'x86_64', 'arm64']
+            # Check if running as administrator
+            if not self.is_admin():
+                print_warning("Metasploit installation requires administrator privileges.")
+                print_info("Please run this script as Administrator for full functionality.")
+                return
             
-            # For Windows, we'll try to download the official installer
-            # Note: This is a simplified approach. In practice, you would need to
-            # check the official Metasploit website for the latest download link
-            print_info("Downloading Metasploit installer...")
+            # PowerShell script for silent installation
+            ps_script = '''
+[CmdletBinding()]
+Param(
+$DownloadURL = "https://windows.metasploit.com/metasploitframework-latest.msi",
+$DownloadLocation = "$env:APPDATA/Metasploit",
+$InstallLocation = "C:\\metasploit-framework",
+$LogLocation = "$DownloadLocation/install.log"
+)
+
+If(! (Test-Path $DownloadLocation) ){
+New-Item -Path $DownloadLocation -ItemType Directory
+}
+
+If(! (Test-Path $InstallLocation) ){
+New-Item -Path $InstallLocation -ItemType Directory
+}
+
+$Installer = "$DownloadLocation/metasploit.msi"
+
+Write-Host "Downloading Metasploit installer..."
+Invoke-WebRequest -UseBasicParsing -Uri $DownloadURL -OutFile $Installer
+
+Write-Host "Installing Metasploit..."
+& $Installer /q /log $LogLocation INSTALLLOCATION="$InstallLocation"
+
+Write-Host "Installation completed."
+'''
             
-            # Create a temporary directory for the installation
-            with tempfile.TemporaryDirectory() as temp_dir:
-                installer_path = os.path.join(temp_dir, "metasploit-installer.exe")
-                
-                # Try to download the installer (this is a placeholder URL)
-                # In a real implementation, you would need to get the actual download link
-                print_warning("Automatic download of Metasploit installer is not implemented due to dynamic URLs.")
-                print_info("Please download the Metasploit installer manually from:")
-                print_info("https://www.metasploit.com/download/")
-                print_info("After downloading, run the installer as Administrator.")
-                
-                # For now, we'll just provide instructions
-                print_info("Installation steps:")
-                print_info("1. Download the Metasploit installer from the link above")
-                print_info("2. Run the installer as Administrator")
-                print_info("3. Make sure to add Metasploit to your PATH during installation")
-                print_info("4. Restart your command prompt/terminal after installation")
+            # Save the PowerShell script to a temporary file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as f:
+                f.write(ps_script)
+                ps_script_path = f.name
+            
+            # Run the PowerShell script
+            print_info("Downloading and installing Metasploit. This may take several minutes...")
+            result = subprocess.run(
+                ["powershell", "-ExecutionPolicy", "Bypass", "-File", ps_script_path],
+                capture_output=True, text=True
+            )
+            
+            # Clean up the temporary script file
+            os.unlink(ps_script_path)
+            
+            if result.returncode == 0:
+                print_success("Metasploit installed successfully using official installer")
+                print_info("The installation location is: C:\\metasploit-framework")
+                print_info("Make sure C:\\metasploit-framework\\bin is in your PATH")
+            else:
+                print_error(f"Failed to install Metasploit: {result.stderr}")
+                print_info("Please install Metasploit manually from: https://www.metasploit.com/download/")
                 
         except Exception as e:
             print_error(f"Error during Metasploit installation: {e}")
@@ -487,14 +517,10 @@ class NetworkSecurityToolkit:
 
     def select_target(self):
         """Select target device from scanned devices"""
-        if not self.devices:
-            print_error("No devices scanned yet. Please scan network first.")
-            input("Press Enter to continue...")
-            return
-            
         print_header("TARGET SELECTION")
         try:
             # Initialize the selector with the scanned devices
+            # Even if no devices were found, we can still allow manual IP entry
             self.selector = TargetSelector(self.devices)
             self.selected_target = self.selector.select_target_interactive()
             if self.selected_target:
@@ -688,7 +714,7 @@ class NetworkSecurityToolkit:
         """Display main menu"""
         print_header("NETWORK SECURITY TESTING TOOLKIT")
         print("1. Scan Network")
-        print("2. Select Target")
+        print("2. Select Target (with manual IP entry option)")
         print("3. Scan Ports")
         print("4. Run Automated Exploits")
         print("5. Run Single Exploit")

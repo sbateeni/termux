@@ -106,26 +106,84 @@ def setup_windows():
                         print_error(f"Failed to install {name}: {result.stderr}")
                         if name == "Metasploit":
                             print_info("Trying alternative installation method...")
-                            _install_metasploit_windows()
+                            _install_metasploit_windows_official()
                 except Exception as e:
                     print_error(f"Error installing {name}: {e}")
                     if name == "Metasploit":
                         print_info("Trying alternative installation method...")
-                        _install_metasploit_windows()
+                        _install_metasploit_windows_official()
     except Exception as e:
         print_error(f"Error during Windows setup: {e}")
 
-def _install_metasploit_windows():
-    """Install Metasploit on Windows using alternative method"""
+def _install_metasploit_windows_official():
+    """Install Metasploit on Windows using the official nightly installer"""
     try:
-        print_info("Attempting alternative Metasploit installation...")
-        print_warning("Automatic download of Metasploit installer is not implemented due to dynamic URLs.")
-        print_info("Please download the Metasploit installer manually from:")
-        print_info("https://www.metasploit.com/download/")
-        print_info("After downloading, run the installer as Administrator.")
-        print_info("Make sure to add Metasploit to your PATH during installation.")
+        import tempfile
+        import os
+        
+        print_info("Attempting to download and install Metasploit using official installer...")
+        
+        # Check if running as administrator
+        if not is_admin():
+            print_warning("Metasploit installation requires administrator privileges.")
+            print_info("Please run this script as Administrator for full functionality.")
+            return
+        
+        # PowerShell script for silent installation
+        ps_script = '''
+[CmdletBinding()]
+Param(
+$DownloadURL = "https://windows.metasploit.com/metasploitframework-latest.msi",
+$DownloadLocation = "$env:APPDATA/Metasploit",
+$InstallLocation = "C:\\metasploit-framework",
+$LogLocation = "$DownloadLocation/install.log"
+)
+
+If(! (Test-Path $DownloadLocation) ){
+New-Item -Path $DownloadLocation -ItemType Directory
+}
+
+If(! (Test-Path $InstallLocation) ){
+New-Item -Path $InstallLocation -ItemType Directory
+}
+
+$Installer = "$DownloadLocation/metasploit.msi"
+
+Write-Host "Downloading Metasploit installer..."
+Invoke-WebRequest -UseBasicParsing -Uri $DownloadURL -OutFile $Installer
+
+Write-Host "Installing Metasploit..."
+& $Installer /q /log $LogLocation INSTALLLOCATION="$InstallLocation"
+
+Write-Host "Installation completed."
+'''
+        
+        # Save the PowerShell script to a temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as f:
+            f.write(ps_script)
+            ps_script_path = f.name
+        
+        # Run the PowerShell script
+        print_info("Downloading and installing Metasploit. This may take several minutes...")
+        result = subprocess.run(
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", ps_script_path],
+            capture_output=True, text=True
+        )
+        
+        # Clean up the temporary script file
+        os.unlink(ps_script_path)
+        
+        if result.returncode == 0:
+            print_success("Metasploit installed successfully using official installer")
+            print_info("The installation location is: C:\\metasploit-framework")
+            print_info("Make sure C:\\metasploit-framework\\bin is in your PATH")
+        else:
+            print_error(f"Failed to install Metasploit: {result.stderr}")
+            print_info("Please install Metasploit manually from: https://www.metasploit.com/download/")
+            
     except Exception as e:
         print_error(f"Error during Metasploit installation: {e}")
+        print_info("Please install Metasploit manually from: https://www.metasploit.com/download/")
 
 def setup_linux():
     """Setup dependencies on Linux"""

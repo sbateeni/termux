@@ -7,6 +7,7 @@ Orchestrates all modules for complete network security testing workflow.
 import sys
 import time
 import os
+import subprocess
 from typing import List, Dict, Optional
 
 # Import all modules
@@ -40,7 +41,10 @@ class SecurityToolkit:
         msf_available = self.msf_interface.check_metasploit_installed()
         
         if not msf_available:
-            print_info("Metasploit not found. Exploitation features will be simulated.")
+            print_warning("Metasploit Framework not found!")
+            print_info("Exploitation features will be simulated.")
+            print_info("To enable real exploit functionality, please install Metasploit Framework.")
+            print_info("Run setup (Option 8) for installation guidance.")
         
         while True:
             self.display_menu()
@@ -412,6 +416,8 @@ class SecurityToolkit:
                 print_success("Exploit script executed successfully!")
             else:
                 print_error("Failed to execute exploit script.")
+                print_info("Make sure Metasploit is properly installed and the script file is valid.")
+                print_info("You can run the setup (Option 8) to install missing dependencies.")
                 
         except Exception as e:
             print_error(f"Error running exploit script: {e}")
@@ -466,8 +472,19 @@ class SecurityToolkit:
                 "wget"
             ]
             
-            print_info("Installing packages...")
+            print_info("Checking and installing packages...")
             for package in packages:
+                # Check if package is already installed
+                try:
+                    result = subprocess.run(["dpkg", "-l", package], 
+                                          capture_output=True, text=True)
+                    if "ii  " + package in result.stdout:
+                        print_info(f"{package} is already installed. Skipping...")
+                        continue
+                except Exception:
+                    # If check fails, proceed with installation
+                    pass
+                
                 print_info(f"Installing {package}...")
                 os.system(f"pkg install {package} -y")
             
@@ -478,6 +495,17 @@ class SecurityToolkit:
             
             print_info("Installing Python packages...")
             for package in python_packages:
+                # Check if Python package is already installed
+                try:
+                    import importlib
+                    importlib.import_module(package)
+                    print_info(f"Python package {package} is already installed. Skipping...")
+                    continue
+                except ImportError:
+                    pass  # Package not found, proceed with installation
+                except Exception:
+                    pass  # If check fails, proceed with installation
+                
                 print_info(f"Installing Python package {package}...")
                 os.system(f"pip install {package}")
             
@@ -491,6 +519,15 @@ class SecurityToolkit:
         print_info("Setting up dependencies for Windows...")
         
         try:
+            # Check if running as administrator
+            import ctypes
+            is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+            if not is_admin:
+                print_warning("Not running as Administrator. Some installations may fail.")
+                print_info("For best results, run this script as Administrator.")
+                print_info("Right-click on Command Prompt or PowerShell and select 'Run as Administrator'")
+                print_info("")
+            
             # Check if Chocolatey is installed
             import subprocess
             try:
@@ -504,22 +541,55 @@ class SecurityToolkit:
                 use_choco = False
             
             if use_choco:
-                # Install packages using Chocolatey
+                # Check for lock files and suggest resolution
+                lock_file_path = r"C:\ProgramData\chocolatey\lib"
+                if os.path.exists(lock_file_path):
+                    import glob
+                    lock_files = glob.glob(os.path.join(lock_file_path, "*") + "/*lock*")
+                    if lock_files:
+                        print_warning("Lock files detected. If installation fails, you may need to:")
+                        print_info("  1. Close all Chocolatey/PowerShell windows")
+                        print_info("  2. Restart your computer")
+                        print_info("  3. Run this setup again as Administrator")
+                        print_info("")
+                
+                # Check and install packages using Chocolatey
                 packages = [
                     "python",
                     "nmap",
                     "curl"
                 ]
                 
-                print_info("Installing packages with Chocolatey...")
+                print_info("Checking and installing packages with Chocolatey...")
                 for package in packages:
+                    # Check if package is already installed
+                    try:
+                        result = subprocess.run(["choco", "list", "--local-only", package], 
+                                              capture_output=True, text=True, timeout=30)
+                        if package.lower() in result.stdout.lower() and "packages installed" not in result.stdout.lower():
+                            print_info(f"{package} is already installed. Skipping...")
+                            continue
+                    except Exception:
+                        # If check fails, proceed with installation
+                        pass
+                    
                     print_info(f"Installing {package}...")
-                    os.system(f"choco install {package} -y")
+                    result = os.system(f"choco install {package} -y")
+                    if result != 0:
+                        print_error(f"Failed to install {package}. Try running as Administrator.")
             else:
                 print_warning("Chocolatey not found. Please install packages manually:")
-                print_info("  - Python 3.6+")
-                print_info("  - Nmap")
-                print_info("  - Git (optional)")
+                print_info("  - Python 3.6+ (https://www.python.org/downloads/)")
+                print_info("  - Nmap (https://nmap.org/download.html)")
+                print_info("  - Git (optional) (https://git-scm.com/download/win)")
+                print_info("")
+                print_info("To install Chocolatey (recommended):")
+                print_info("  1. Run PowerShell as Administrator")
+                print_info("  2. Run: Set-ExecutionPolicy Bypass -Scope Process -Force")
+                print_info("  3. Run: [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072")
+                print_info("  4. Run: iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))")
+                print_info("  5. Restart your shell and run this setup again")
+                print_info("")
             
             # Install Python packages
             python_packages = [
@@ -529,9 +599,20 @@ class SecurityToolkit:
             print_info("Installing Python packages...")
             for package in python_packages:
                 print_info(f"Installing Python package {package}...")
-                os.system(f"pip install {package}")
+                result = os.system(f"pip install {package}")
+                if result != 0:
+                    print_error(f"Failed to install Python package {package}")
             
-            print_success("Windows setup completed!")
+            # Provide Metasploit installation instructions
+            print_info("")
+            print_info("IMPORTANT: Metasploit Framework must be installed separately:")
+            print_info("  1. Download Metasploit Framework from: https://github.com/rapid7/metasploit-framework")
+            print_info("  2. Or use the official installer: https://www.metasploit.com/download/")
+            print_info("  3. Follow the Windows installation guide")
+            print_info("  4. Make sure 'msfconsole' is in your PATH after installation")
+            print_info("")
+            
+            print_success("Windows setup completed! Please install Metasploit Framework separately.")
             
         except Exception as e:
             print_error(f"Error during Windows setup: {e}")
@@ -575,6 +656,13 @@ class SecurityToolkit:
                     "curl"
                 ]
                 for package in packages:
+                    # Check if package is already installed
+                    check_result = subprocess.run(["dpkg", "-l", package], 
+                                                capture_output=True, text=True)
+                    if "ii  " + package in check_result.stdout:
+                        print_info(f"{package} is already installed. Skipping...")
+                        continue
+                            
                     print_info(f"Installing {package}...")
                     os.system(f"sudo apt install {package} -y")
             elif package_manager == "yum":
@@ -589,6 +677,13 @@ class SecurityToolkit:
                     "curl"
                 ]
                 for package in packages:
+                    # Check if package is already installed
+                    check_result = subprocess.run(["rpm", "-q", package], 
+                                                capture_output=True, text=True)
+                    if check_result.returncode == 0:
+                        print_info(f"{package} is already installed. Skipping...")
+                        continue
+                            
                     print_info(f"Installing {package}...")
                     os.system(f"sudo yum install {package} -y")
             elif package_manager == "dnf":
@@ -603,6 +698,13 @@ class SecurityToolkit:
                     "curl"
                 ]
                 for package in packages:
+                    # Check if package is already installed
+                    check_result = subprocess.run(["rpm", "-q", package], 
+                                                capture_output=True, text=True)
+                    if check_result.returncode == 0:
+                        print_info(f"{package} is already installed. Skipping...")
+                        continue
+                            
                     print_info(f"Installing {package}...")
                     os.system(f"sudo dnf install {package} -y")
             elif package_manager == "pacman":
@@ -617,6 +719,13 @@ class SecurityToolkit:
                     "curl"
                 ]
                 for package in packages:
+                    # Check if package is already installed
+                    check_result = subprocess.run(["pacman", "-Q", package], 
+                                                capture_output=True, text=True)
+                    if check_result.returncode == 0:
+                        print_info(f"{package} is already installed. Skipping...")
+                        continue
+                            
                     print_info(f"Installing {package}...")
                     os.system(f"sudo pacman -S {package} --noconfirm")
             else:
@@ -667,8 +776,19 @@ class SecurityToolkit:
                     "curl"
                 ]
                 
-                print_info("Installing packages with Homebrew...")
+                print_info("Checking and installing packages with Homebrew...")
                 for package in packages:
+                    # Check if package is already installed
+                    try:
+                        result = subprocess.run(["brew", "list", package], 
+                                              capture_output=True, text=True, timeout=30)
+                        if result.returncode == 0:
+                            print_info(f"{package} is already installed. Skipping...")
+                            continue
+                    except Exception:
+                        # If check fails, proceed with installation
+                        pass
+                    
                     print_info(f"Installing {package}...")
                     os.system(f"brew install {package}")
             else:

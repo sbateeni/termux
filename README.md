@@ -42,19 +42,22 @@ A comprehensive Python-based network security testing toolkit that provides the 
 
 - Python 3.6 or higher
 - **Metasploit Framework (REQUIRED for exploit functionality)**
-  - Install from: https://github.com/rapid7/metasploit-framework
-  - Follow the official installation guide for your platform
+  - **Windows**: Download from https://www.metasploit.com/download/ or clone from GitHub
+  - **Linux/macOS**: Follow official installation guide at https://docs.metasploit.com/docs/using-metasploit/getting-started/setup.html
+  - Ensure `msfconsole` is in your PATH after installation
 - Windows, macOS, or Linux operating system (including Termux on Android)
-- Administrative privileges for network scanning
+- Administrative privileges for network scanning (Windows) or sudo access (Linux/macOS)
 
 ## Automatic Setup
 
-The toolkit includes an automatic setup feature that can install all required dependencies:
+The toolkit includes an automatic setup feature that can install most required dependencies:
 
 - **Option 8** in the main menu
 - **Standalone setup script**: `python setup.py`
 - Supports Windows, Linux, macOS, and Termux environments
 - Automatically detects package managers (Chocolatey, Homebrew, apt, yum, dnf, pacman)
+
+**Note**: Metasploit Framework must be installed manually as it requires additional setup steps beyond package management.
 
 ## Installation
 

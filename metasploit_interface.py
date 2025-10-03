@@ -37,7 +37,15 @@ class MetasploitInterface:
         try:
             # Try to find Metasploit in common locations
             import shutil
-            msfconsole_path = shutil.which('msfconsole')
+            import platform
+            
+            # Determine the correct executable name based on OS
+            if platform.system().lower() == 'windows':
+                msfconsole_name = 'msfconsole.bat'
+            else:
+                msfconsole_name = 'msfconsole'
+            
+            msfconsole_path = shutil.which(msfconsole_name)
             if msfconsole_path:
                 self.msf_path = msfconsole_path
                 print(f"[+] Metasploit found: {msfconsole_path}")
@@ -45,12 +53,19 @@ class MetasploitInterface:
                 return True
             
             # Try common installation paths
-            common_paths = [
-                '/usr/bin/msfconsole',
-                '/opt/metasploit-framework/bin/msfconsole',
-                'C:\\Program Files\\metasploit-framework\\bin\\msfconsole.bat',
-                'C:\\metasploit-framework\\bin\\msfconsole.bat'
-            ]
+            system = platform.system().lower()
+            if system == 'windows':
+                common_paths = [
+                    'C:\\Program Files\\metasploit-framework\\bin\\msfconsole.bat',
+                    'C:\\metasploit-framework\\bin\\msfconsole.bat',
+                    'C:\\Program Files (x86)\\metasploit-framework\\bin\\msfconsole.bat'
+                ]
+            else:
+                common_paths = [
+                    '/usr/bin/msfconsole',
+                    '/opt/metasploit-framework/bin/msfconsole',
+                    '/usr/local/bin/msfconsole'
+                ]
             
             for path in common_paths:
                 if os.path.exists(path):
@@ -59,7 +74,29 @@ class MetasploitInterface:
                     self.is_connected = True
                     return True
             
-            print("[-] Metasploit not found. Please install Metasploit Framework.")
+            print("[-] Metasploit Framework not found.")
+            print_info("Metasploit Framework is REQUIRED for exploit functionality.")
+            print_info("")
+            print_info("To install Metasploit Framework:")
+            
+            if system == 'windows':
+                print_info("  Windows:")
+                print_info("    1. Download the official installer from: https://www.metasploit.com/download/")
+                print_info("    2. Or clone the repository: https://github.com/rapid7/metasploit-framework")
+                print_info("    3. Follow the Windows installation guide")
+                print_info("    4. Make sure 'msfconsole.bat' is in your PATH")
+            elif system == 'darwin':  # macOS
+                print_info("  macOS:")
+                print_info("    1. Install Homebrew if not already installed")
+                print_info("    2. Run: brew install metasploit")
+                print_info("    3. Or follow the official guide at: https://docs.metasploit.com/docs/using-metasploit/getting-started/setup.html")
+            else:  # Linux
+                print_info("  Linux:")
+                print_info("    1. Follow the official installation guide at: https://docs.metasploit.com/docs/using-metasploit/getting-started/setup.html")
+                print_info("    2. Or use the quick install script: curl https://raw.githubusercontent.com/rapid7/metasploit-framework/master/scripts/install-metasploit.sh | bash")
+            
+            print_info("")
+            print_info("After installation, restart your terminal/command prompt and run this tool again.")
             return False
         except Exception as e:
             print(f"[-] Error checking Metasploit installation: {e}")
@@ -605,11 +642,19 @@ exit
         Returns:
             True if script executed successfully, False otherwise
         """
-        if not os.path.exists(script_path):
-            print_error(f"Script file not found: {script_path}")
-            return False
+        # Normalize the script path for the current OS
+        normalized_script_path = os.path.normpath(script_path)
         
-        print_info(f"Running exploit script: {script_path}")
+        if not os.path.exists(normalized_script_path):
+            print_error(f"Script file not found: {normalized_script_path}")
+            # Also check the original path
+            if script_path != normalized_script_path and os.path.exists(script_path):
+                print_info(f"Using original path: {script_path}")
+                normalized_script_path = script_path
+            else:
+                return False
+        
+        print_info(f"Running exploit script: {normalized_script_path}")
         print_warning("WARNING: This will execute a real exploit against the target system!")
         print_warning("Ensure you have proper authorization before proceeding.")
         
@@ -619,13 +664,32 @@ exit
             print_info("Exploit execution cancelled by user.")
             return False
         
+        # Check if Metasploit is properly installed
+        if not self.is_connected or not self.msf_path:
+            print_error("Metasploit is not properly installed or configured.")
+            print_info("Please run the setup (Option 8) to install Metasploit.")
+            return False
+        
+        # Verify Metasploit executable exists
+        if not os.path.exists(self.msf_path):
+            print_error(f"Metasploit executable not found: {self.msf_path}")
+            print_info("Please run the setup (Option 8) to install Metasploit.")
+            return False
+        
         try:
+            print_info(f"Executing: {self.msf_path} -r {normalized_script_path}")
+            
             # Run the actual Metasploit script
+            # Use shell=True on Windows to handle path issues
+            import platform
+            use_shell = platform.system().lower() == 'windows'
+            
             result = subprocess.run(
-                [self.msf_path, '-r', script_path],
+                f'"{self.msf_path}" -r "{normalized_script_path}"',
                 capture_output=False,  # Allow real-time output
                 text=True,
-                timeout=300  # 5 minute timeout
+                timeout=300,  # 5 minute timeout
+                shell=use_shell
             )
             
             if result.returncode == 0:
@@ -636,6 +700,11 @@ exit
                 return False
         except subprocess.TimeoutExpired:
             print_error("Exploit script timed out")
+            return False
+        except FileNotFoundError as e:
+            print_error(f"File not found error: {e}")
+            print_info("This usually means Metasploit is not installed or not in PATH.")
+            print_info("Please run the setup (Option 8) to install Metasploit.")
             return False
         except Exception as e:
             print_error(f"Error running exploit script: {e}")

@@ -148,8 +148,11 @@ def setup_macos():
     if not shutil.which("brew"):
         print_info("Installing Homebrew...")
         try:
-            install_cmd = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
-            subprocess.run(install_cmd, shell=True, check=True)
+            brew_install_cmd = (
+                '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/'
+                'Homebrew/install/HEAD/install.sh)"'
+            )
+            subprocess.run(brew_install_cmd, shell=True, check=True)
             print_success("Homebrew installed successfully")
         except subprocess.CalledProcessError:
             print_error("Failed to install Homebrew")
@@ -189,28 +192,44 @@ def setup_termux():
     """Setup dependencies on Termux"""
     print_header("TERMUX SETUP")
     
-    packages = ["nmap", "metasploit"]
-    
-    # Update package lists
-    print_info("Updating package lists...")
     try:
-        subprocess.run("pkg update -y", shell=True, check=True)
+        # Update package lists
+        print_info("Updating package lists...")
+        subprocess.run(["pkg", "update", "-y"], check=True)
         print_success("Package lists updated")
-    except subprocess.CalledProcessError:
-        print_warning("Failed to update package lists")
-    
-    # Install packages
-    for pkg_name in packages:
-        print_info(f"Installing {pkg_name}...")
-        try:
-            result = subprocess.run(f"pkg install {pkg_name} -y", 
-                                  shell=True, capture_output=True, text=True)
-            if result.returncode == 0:
-                print_success(f"{pkg_name} installed successfully")
-            else:
-                print_error(f"Failed to install {pkg_name}: {result.stderr}")
-        except Exception as e:
-            print_error(f"Error installing {pkg_name}: {e}")
+        
+        # Install basic network tools
+        print_info("Installing network tools...")
+        subprocess.run(["pkg", "install", "inetutils", "traceroute", "net-tools", "-y"], check=True)
+        print_success("Network tools installed")
+        
+        # Install Nmap
+        print_info("Installing Nmap...")
+        subprocess.run(["pkg", "install", "nmap", "-y"], check=True)
+        print_success("Nmap installed successfully")
+        
+        # Install Metasploit Framework using the recommended method
+        print_info("Installing Metasploit Framework...")
+        print_info("This may take a while. Please be patient...")
+        
+        # Download and run the Metasploit installation script
+        msf_install_script = "https://github.com/gushmazuko/metasploit_in_termux/raw/master/metasploit.sh"
+        subprocess.run(["pkg", "install", "wget", "-y"], check=True)
+        subprocess.run(["wget", msf_install_script], check=True)
+        subprocess.run(["chmod", "+x", "metasploit.sh"], check=True)
+        subprocess.run(["./metasploit.sh"], check=True)
+        
+        print_success("Metasploit Framework installed successfully")
+        print_info("To start Metasploit, run: msfconsole")
+        print_info("If you encounter issues, try:")
+        print_info("curl -fsSL https://kutt.it/msf | bash")
+            
+    except subprocess.CalledProcessError as e:
+        print_error(f"Error installing packages in Termux: {e}")
+        print_info("Try manually installing Metasploit with:")
+        print_info("curl -fsSL https://kutt.it/msf | bash")
+    except Exception as e:
+        print_error(f"Unexpected error in Termux setup: {e}")
 
 def install_python_packages():
     """Install required Python packages"""

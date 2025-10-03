@@ -55,13 +55,33 @@ class NetworkScanner:
     def _ping_host(self, ip: str) -> bool:
         """Ping a single host to check if it's alive."""
         try:
-            # Use ping command appropriate for Windows
-            result = subprocess.run(
-                ["ping", "-n", "1", "-w", "1000", ip],
-                capture_output=True,
-                text=True,
-                timeout=3
-            )
+            # Check if running on Termux
+            is_termux = "com.termux" in os.environ.get("PREFIX", "")
+            
+            if is_termux:
+                # Use ping command appropriate for Termux
+                result = subprocess.run(
+                    ["ping", "-c", "1", "-W", "1", ip],
+                    capture_output=True,
+                    text=True,
+                    timeout=3
+                )
+            elif os.name == 'nt':  # Windows
+                # Use ping command appropriate for Windows
+                result = subprocess.run(
+                    ["ping", "-n", "1", "-w", "1000", ip],
+                    capture_output=True,
+                    text=True,
+                    timeout=3
+                )
+            else:  # Unix/Linux/Mac
+                # Use ping command appropriate for Unix/Linux/Mac
+                result = subprocess.run(
+                    ["ping", "-c", "1", "-W", "1", ip],
+                    capture_output=True,
+                    text=True,
+                    timeout=3
+                )
             return result.returncode == 0
         except Exception:
             return False
@@ -69,7 +89,56 @@ class NetworkScanner:
     def _get_mac_address(self, ip: str) -> Optional[str]:
         """Get MAC address for a given IP using ARP table or other methods."""
         try:
-            # Method 1: Use arp command to get MAC address
+            # Check if running on Termux
+            is_termux = "com.termux" in os.environ.get("PREFIX", "")
+            
+            if is_termux:
+                # For Termux, try different approaches
+                try:
+                    # Try using ip neighbor command first
+                    result = subprocess.run(
+                        ["ip", "neighbor", "show", ip],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        # Parse output for MAC address
+                        lines = result.stdout.strip().split('\n')
+                        for line in lines:
+                            if ip in line and 'lladdr' in line:
+                                # Extract MAC address
+                                parts = line.split()
+                                for i, part in enumerate(parts):
+                                    if part == 'lladdr' and i + 1 < len(parts):
+                                        mac = parts[i + 1]
+                                        return mac.upper()
+                except Exception:
+                    pass
+                
+                # Try arp command if ip neighbor didn't work
+                try:
+                    result = subprocess.run(
+                        ["arp", ip],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        # Parse ARP output for MAC address
+                        lines = result.stdout.strip().split('\n')
+                        for line in lines:
+                            if ip in line:
+                                # Look for MAC address pattern (xx:xx:xx:xx:xx:xx)
+                                mac_match = re.search(r'([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}', line)
+                                if mac_match:
+                                    return mac_match.group(0).upper()
+                except Exception:
+                    pass
+                    
+                return None
+            
+            # Method 1: Use arp command to get MAC address (non-Termux)
             if os.name == 'nt':  # Windows
                 result = subprocess.run(
                     ["arp", "-a", ip],
@@ -158,6 +227,12 @@ class NetworkScanner:
         print(f"[*] Local IP: {self.local_ip}")
         print("[*] Starting network scan...")
         
+        # Check if running on Termux
+        is_termux = "com.termux" in os.environ.get("PREFIX", "")
+        if is_termux:
+            print("[*] Detected Termux environment - using alternative scanning method...")
+            return self._scan_network_termux()
+        
         # Generate IP range
         base_ip = self.local_ip.rsplit('.', 1)[0]
         ip_list = [f"{base_ip}.{i}" for i in range(1, 255)]
@@ -174,6 +249,101 @@ class NetworkScanner:
                 result = future.result()
                 if result:
                     self.devices.append(result)
+        
+        # Sort devices by IP
+        self.devices.sort(key=lambda x: socket.inet_aton(x['ip']))
+        
+        print(f"[+] Scan complete! Found {len(self.devices)} devices")
+        return self.devices
+    
+    def _scan_network_termux(self) -> List[Dict]:
+        """Alternative network scanning method for Termux."""
+        self.devices = []
+        
+        try:
+            # Use nmap for scanning in Termux as it's more reliable
+            print("[*] Using nmap for scanning in Termux...")
+            
+            # Check if nmap is installed
+            nmap_installed = shutil.which("nmap") is not None
+            if not nmap_installed:
+                print("[-] nmap is not installed. Please install it with: pkg install nmap")
+                print("[-] Falling back to basic ping scan...")
+                return self._basic_ping_scan()
+            
+            # Run nmap scan
+            result = subprocess.run(
+                ["nmap", "-sn", self.network_range],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode == 0:
+                # Parse nmap output
+                lines = result.stdout.strip().split('\n')
+                current_ip = None
+                
+                for line in lines:
+                    # Look for IP addresses
+                    ip_match = re.search(r'Nmap scan report for ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)', line)
+                    if ip_match:
+                        current_ip = ip_match.group(1)
+                        continue
+                    
+                    # Look for MAC addresses
+                    if current_ip and 'MAC Address:' in line:
+                        mac_match = re.search(r'MAC Address: ([0-9A-F:]+)', line)
+                        if mac_match:
+                            mac = mac_match.group(1)
+                            hostname = "Unknown"  # nmap doesn't always provide hostname in this format
+                            
+                            # Try to get hostname
+                            try:
+                                hostname = socket.gethostbyaddr(current_ip)[0]
+                            except Exception:
+                                pass
+                            
+                            self.devices.append({
+                                'ip': current_ip,
+                                'mac': mac,
+                                'hostname': hostname,
+                                'status': 'alive'
+                            })
+                            current_ip = None
+            
+            # Sort devices by IP
+            self.devices.sort(key=lambda x: socket.inet_aton(x['ip']))
+            
+            print(f"[+] Scan complete! Found {len(self.devices)} devices")
+            return self.devices
+            
+        except Exception as e:
+            print(f"[-] Error during nmap scan: {e}")
+            print("[-] Falling back to basic ping scan...")
+            return self._basic_ping_scan()
+    
+    def _basic_ping_scan(self) -> List[Dict]:
+        """Basic ping scan as fallback method."""
+        print("[*] Using basic ping scan...")
+        
+        # Generate IP range
+        base_ip = self.local_ip.rsplit('.', 1)[0]
+        ip_list = [f"{base_ip}.{i}" for i in range(1, 255)]
+        
+        # Try to ping each IP sequentially (slower but more compatible)
+        for ip in ip_list:
+            if self._ping_host(ip):
+                print(f"[+] Found device: {ip}")
+                mac = self._get_mac_address(ip)
+                hostname = self._get_hostname(ip)
+                
+                self.devices.append({
+                    'ip': ip,
+                    'mac': mac or 'Unknown',
+                    'hostname': hostname,
+                    'status': 'alive'
+                })
         
         # Sort devices by IP
         self.devices.sort(key=lambda x: socket.inet_aton(x['ip']))

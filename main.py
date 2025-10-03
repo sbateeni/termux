@@ -71,7 +71,8 @@ class NetworkSecurityToolkit:
                 if not self.is_admin():
                     print_warning("This toolkit requires administrator privileges on Windows for some operations.")
                     print_info("Some features may not work properly without admin rights.")
-                    input("Press Enter to continue anyway...")
+                    print_info("Please run this script as Administrator for full functionality.")
+                    input("Press Enter to continue anyway (some features may not work)...")
                 
                 # Check if Chocolatey is installed
                 choco_installed = shutil.which("choco") is not None
@@ -139,17 +140,36 @@ class NetworkSecurityToolkit:
                 print_info("Running on Termux")
                 try:
                     # Update package list
+                    print_info("Updating package lists...")
                     subprocess.run(["pkg", "update", "-y"], check=True)
                     
-                    # Install packages
-                    packages = ["nmap", "metasploit"]
-                    for package in packages:
-                        print_info(f"Installing {package}...")
-                        subprocess.run(["pkg", "install", package, "-y"], check=True)
-                        print_success(f"{package} installed successfully")
+                    # Install basic network tools first
+                    print_info("Installing network tools...")
+                    subprocess.run(["pkg", "install", "inetutils", "traceroute", "net-tools", "-y"], check=True)
+                    
+                    # Install Nmap
+                    print_info("Installing Nmap...")
+                    subprocess.run(["pkg", "install", "nmap", "-y"], check=True)
+                    print_success("Nmap installed successfully")
+                    
+                    # Install Metasploit Framework using the recommended method
+                    print_info("Installing Metasploit Framework...")
+                    print_info("This may take a while. Please be patient...")
+                    
+                    # Download and run the Metasploit installation script
+                    msf_install_script = "https://github.com/gushmazuko/metasploit_in_termux/raw/master/metasploit.sh"
+                    subprocess.run(["pkg", "install", "wget", "-y"], check=True)
+                    subprocess.run(["wget", msf_install_script], check=True)
+                    subprocess.run(["chmod", "+x", "metasploit.sh"], check=True)
+                    subprocess.run(["./metasploit.sh"], check=True)
+                    
+                    print_success("Metasploit Framework installed successfully")
+                    print_info("To start Metasploit, run: msfconsole")
                         
                 except subprocess.CalledProcessError as e:
                     print_error(f"Error installing packages in Termux: {e}")
+                    print_info("Try manually installing Metasploit with:")
+                    print_info("curl -fsSL https://kutt.it/msf | bash")
                 except Exception as e:
                     print_error(f"Unexpected error in Termux setup: {e}")
             else:
@@ -349,6 +369,20 @@ class NetworkSecurityToolkit:
         """Scan network for connected devices"""
         print_header("NETWORK SCAN")
         try:
+            # Check if running on Termux and handle accordingly
+            import platform
+            if "com.termux" in os.environ.get("PREFIX", "") and platform.system().lower() == "linux":
+                print_info("Running on Termux - using alternative scanning method...")
+                print_info("Installing required tools...")
+                try:
+                    import subprocess
+                    # Install required tools for Termux
+                    subprocess.run(["pkg", "install", "nmap", "net-tools", "-y"], check=True)
+                    print_success("Required tools installed")
+                except Exception as e:
+                    print_warning(f"Could not install tools automatically: {e}")
+                    print_info("Please manually install: pkg install nmap net-tools")
+            
             self.devices = self.scanner.scan_network()
             if self.devices:
                 print_success(f"Found {len(self.devices)} devices:")
@@ -356,8 +390,11 @@ class NetworkSecurityToolkit:
                     print_info(f"{i+1}. IP: {device['ip']} | MAC: {device['mac']}")
             else:
                 print_warning("No devices found on network")
+                print_info("If you're on Termux, network scanning might be limited.")
+                print_info("Try using nmap directly: nmap -sn 192.168.1.0/24")
         except Exception as e:
             print_error(f"Error during network scan: {e}")
+            print_info("If you're on Termux, try: nmap -sn your_network_range")
         input("\nPress Enter to continue...")
 
     def select_target(self):
@@ -424,6 +461,7 @@ class NetworkSecurityToolkit:
             if not self.metasploit.check_metasploit_installed():
                 print_error("Metasploit is not installed or not in PATH")
                 print_info("Please install Metasploit and ensure it's in your system PATH")
+                print_info("On Termux, use: curl -fsSL https://kutt.it/msf | bash")
                 input("Press Enter to continue...")
                 return
             
@@ -507,6 +545,7 @@ class NetworkSecurityToolkit:
             if not self.metasploit.check_metasploit_installed():
                 print_error("Metasploit is not installed or not in PATH")
                 print_info("Please install Metasploit and ensure it's in your system PATH")
+                print_info("On Termux, use: curl -fsSL https://kutt.it/msf | bash")
                 input("Press Enter to continue...")
                 return
             
@@ -599,12 +638,22 @@ class NetworkSecurityToolkit:
                     print_success(f"Auto-selected only device: {self.selected_target['ip']}")
             else:
                 print_warning("No devices found on network")
+                print_info("If you're on Termux, network scanning might be limited.")
+                print_info("Try using nmap directly: nmap -sn 192.168.1.0/24")
         except Exception as e:
             print_error(f"Error during network rescan: {e}")
+            print_info("If you're on Termux, try: nmap -sn your_network_range")
         input("Press Enter to continue...")
 
     def run(self):
         """Main application loop"""
+        # Check if running on Termux and provide guidance
+        import platform
+        if "com.termux" in os.environ.get("PREFIX", "") and platform.system().lower() == "linux":
+            print_warning("Running on Termux")
+            print_info("Some features may be limited on Android.")
+            print_info("Make sure you have installed all required packages.")
+        
         while True:
             self.show_menu()
             try:

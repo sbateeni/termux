@@ -1,444 +1,376 @@
 #!/usr/bin/env python3
 """
-Setup Script for Network Security Toolkit
-Automatically installs all required dependencies for the toolkit.
+Network Security Toolkit Setup Script
+Provides automated setup for all required dependencies across multiple platforms.
 """
 
 import os
 import sys
 import platform
 import subprocess
+import shutil
+from pathlib import Path
 
 def print_header(text):
-    """Print a formatted header."""
-    width = max(len(text) + 4, 50)
-    print("\n" + "=" * width)
-    print(f"{text.upper():^{width}}")
-    print("=" * width)
+    """Print formatted header text"""
+    print("\n" + "="*60)
+    print(f"{text:^60}")
+    print("="*60)
 
 def print_info(text):
-    """Print informational message."""
-    print(f"[*] {text}")
+    """Print informational text"""
+    print(f"[i] {text}")
 
 def print_success(text):
-    """Print success message."""
+    """Print success text"""
     print(f"[+] {text}")
 
-def print_error(text):
-    """Print error message."""
-    print(f"[-] {text}")
-
 def print_warning(text):
-    """Print warning message."""
+    """Print warning text"""
     print(f"[!] {text}")
 
-def detect_termux():
-    """Detect if running on Termux."""
-    return os.path.exists("/data/data/com.termux/files/usr")
+def print_error(text):
+    """Print error text"""
+    print(f"[-] {text}")
 
-def setup_termux():
-    """Setup dependencies for Termux environment."""
-    print_info("Setting up dependencies for Termux...")
-    
+def is_admin():
+    """Check if the script is running with administrator privileges"""
     try:
-        # Update package list
-        print_info("Updating package list...")
-        os.system("pkg update -y")
-        
-        # Install required packages
-        packages = [
-            "python",
-            "nmap",
-            "net-tools",
-            "curl",
-            "wget"
-        ]
-        
-        print_info("Checking and installing packages...")
-        for package in packages:
-            # Check if package is already installed
-            try:
-                result = subprocess.run(["dpkg", "-l", package], 
-                                      capture_output=True, text=True)
-                if "ii  " + package in result.stdout:
-                    print_info(f"{package} is already installed. Skipping...")
-                    continue
-            except Exception:
-                # If check fails, proceed with installation
-                pass
-            
-            print_info(f"Installing {package}...")
-            os.system(f"pkg install {package} -y")
-        
-        # Install Python packages
-        python_packages = [
-            "netifaces"
-        ]
-        
-        print_info("Installing Python packages...")
-        for package in python_packages:
-            # Check if Python package is already installed
-            try:
-                import importlib
-                importlib.import_module(package)
-                print_info(f"Python package {package} is already installed. Skipping...")
-                continue
-            except ImportError:
-                pass  # Package not found, proceed with installation
-            except Exception:
-                pass  # If check fails, proceed with installation
-            
-            print_info(f"Installing Python package {package}...")
-            os.system(f"pip install {package}")
-        
-        print_success("Termux setup completed!")
+        return os.getuid() == 0
+    except AttributeError:
+        # Windows
+        import ctypes
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+
+def check_package_installed(package_name, check_command):
+    """Check if a package is already installed"""
+    try:
+        subprocess.run(check_command, shell=True, check=True, 
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
-        
-    except Exception as e:
-        print_error(f"Error during Termux setup: {e}")
+    except subprocess.CalledProcessError:
         return False
 
 def setup_windows():
-    """Setup dependencies for Windows environment."""
-    print_info("Setting up dependencies for Windows...")
+    """Setup dependencies on Windows"""
+    print_header("WINDOWS SETUP")
     
-    try:
-        # Check if running as administrator
-        import ctypes
-        is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
-        if not is_admin:
-            print_warning("Not running as Administrator. Some installations may fail.")
-            print_info("For best results, run this script as Administrator.")
-            print_info("Right-click on Command Prompt or PowerShell and select 'Run as Administrator'")
-            print_info("")
-        
-        # Check if Chocolatey is installed
-        try:
-            result = subprocess.run(["choco", "--version"], capture_output=True, text=True)
-            if result.returncode == 0:
-                print_info("Chocolatey detected")
-                use_choco = True
-            else:
-                use_choco = False
-        except FileNotFoundError:
-            use_choco = False
-        
-        if use_choco:
-            # Check for lock files and suggest resolution
-            lock_file_path = r"C:\ProgramData\chocolatey\lib"
-            if os.path.exists(lock_file_path):
-                import glob
-                lock_files = glob.glob(os.path.join(lock_file_path, "*") + "/*lock*")
-                if lock_files:
-                    print_warning("Lock files detected. If installation fails, you may need to:")
-                    print_info("  1. Close all Chocolatey/PowerShell windows")
-                    print_info("  2. Restart your computer")
-                    print_info("  3. Run this setup again as Administrator")
-                    print_info("")
-            
-            # Check and install packages using Chocolatey
-            packages = [
-                "python",
-                "nmap",
-                "curl"
-            ]
-            
-            print_info("Checking and installing packages with Chocolatey...")
-            for package in packages:
-                # Check if package is already installed
-                try:
-                    result = subprocess.run(["choco", "list", "--local-only", package], 
-                                          capture_output=True, text=True, timeout=30)
-                    if package.lower() in result.stdout.lower() and "packages installed" not in result.stdout.lower():
-                        print_info(f"{package} is already installed. Skipping...")
-                        continue
-                except Exception:
-                    # If check fails, proceed with installation
-                    pass
-                
-                print_info(f"Installing {package}...")
-                result = os.system(f"choco install {package} -y")
-                if result != 0:
-                    print_error(f"Failed to install {package}. Try running as Administrator.")
+    # Check if running as administrator
+    if not is_admin():
+        print_warning("This script needs administrator privileges to install some packages.")
+        print_info("Please run this script as Administrator for full functionality.")
+        input("Press Enter to continue anyway (some features may not work)...")
+    
+    packages = [
+        ("Nmap", "choco install nmap -y", "nmap --version"),
+        ("Metasploit", "choco install metasploit -y", "msfconsole --version")
+    ]
+    
+    for name, install_cmd, check_cmd in packages:
+        print_info(f"Checking {name}...")
+        if check_package_installed(name, check_cmd):
+            print_success(f"{name} is already installed")
         else:
-            print_warning("Chocolatey not found. Please install packages manually:")
-            print_info("  - Python 3.6+ (https://www.python.org/downloads/)")
-            print_info("  - Nmap (https://nmap.org/download.html)")
-            print_info("  - Git (optional) (https://git-scm.com/download/win)")
-            print_info("")
-            print_info("To install Chocolatey (recommended):")
-            print_info("  1. Run PowerShell as Administrator")
-            print_info("  2. Run: Set-ExecutionPolicy Bypass -Scope Process -Force")
-            print_info("  3. Run: [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072")
-            print_info("  4. Run: iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))")
-            print_info("  5. Restart your shell and run this setup again")
-            print_info("")
-        
-        # Install Python packages
-        python_packages = [
-            "netifaces"
-        ]
-        
-        print_info("Installing Python packages...")
-        for package in python_packages:
-            print_info(f"Installing Python package {package}...")
-            result = os.system(f"pip install {package}")
-            if result != 0:
-                print_error(f"Failed to install Python package {package}")
-        
-        # Provide Metasploit installation instructions
-        print_info("")
-        print_info("IMPORTANT: Metasploit Framework must be installed separately:")
-        print_info("  1. Download Metasploit Framework from: https://github.com/rapid7/metasploit-framework")
-        print_info("  2. Or use the official installer: https://www.metasploit.com/download/")
-        print_info("  3. Follow the Windows installation guide")
-        print_info("  4. Make sure 'msfconsole' is in your PATH after installation")
-        print_info("")
-        
-        print_success("Windows setup completed! Please install Metasploit Framework separately.")
-        return True
-        
-    except Exception as e:
-        print_error(f"Error during Windows setup: {e}")
-        return False
+            print_info(f"Installing {name}...")
+            try:
+                result = subprocess.run(install_cmd, shell=True, capture_output=True, text=True)
+                if result.returncode == 0:
+                    print_success(f"{name} installed successfully")
+                else:
+                    print_error(f"Failed to install {name}: {result.stderr}")
+            except Exception as e:
+                print_error(f"Error installing {name}: {e}")
 
 def setup_linux():
-    """Setup dependencies for Linux environment."""
-    print_info("Setting up dependencies for Linux...")
+    """Setup dependencies on Linux"""
+    print_header("LINUX SETUP")
     
+    # Detect package manager
+    package_managers = {
+        "apt": ("apt update", "apt install -y"),
+        "yum": ("yum check-update", "yum install -y"),
+        "dnf": ("dnf check-update", "dnf install -y"),
+        "pacman": ("pacman -Sy", "pacman -S --noconfirm")
+    }
+    
+    pkg_manager = None
+    for pm, _ in package_managers.items():
+        if shutil.which(pm):
+            pkg_manager = pm
+            break
+    
+    if not pkg_manager:
+        print_error("No supported package manager found")
+        return
+    
+    print_info(f"Detected package manager: {pkg_manager}")
+    
+    # Define packages for each manager
+    packages = {
+        "apt": [("nmap", "nmap"), ("metasploit-framework", "msfconsole")],
+        "yum": [("nmap", "nmap"), ("metasploit", "msfconsole")],
+        "dnf": [("nmap", "nmap"), ("metasploit", "msfconsole")],
+        "pacman": [("nmap", "nmap"), ("metasploit", "msfconsole")]
+    }
+    
+    update_cmd, install_cmd = package_managers[pkg_manager]
+    
+    # Update package lists
+    print_info("Updating package lists...")
     try:
-        # Detect package manager
-        package_manager = None
-        
-        try:
-            subprocess.run(["apt", "--version"], capture_output=True)
-            package_manager = "apt"
-        except FileNotFoundError:
-            try:
-                subprocess.run(["yum", "--version"], capture_output=True)
-                package_manager = "yum"
-            except FileNotFoundError:
-                try:
-                    subprocess.run(["dnf", "--version"], capture_output=True)
-                    package_manager = "dnf"
-                except FileNotFoundError:
-                    try:
-                        subprocess.run(["pacman", "--version"], capture_output=True)
-                        package_manager = "pacman"
-                    except FileNotFoundError:
-                        package_manager = None
-        
-        if package_manager == "apt":
-            # Debian/Ubuntu
-            print_info("Using apt package manager")
-            os.system("sudo apt update")
-            packages = [
-                "python3",
-                "python3-pip",
-                "nmap",
-                "net-tools",
-                "curl"
-            ]
-            for package in packages:
-                # Check if package is already installed
-                check_result = subprocess.run(["dpkg", "-l", package], 
-                                            capture_output=True, text=True)
-                if "ii  " + package in check_result.stdout:
-                    print_info(f"{package} is already installed. Skipping...")
-                    continue
-                
-                print_info(f"Installing {package}...")
-                os.system(f"sudo apt install {package} -y")
-        elif package_manager == "yum":
-            # RHEL/CentOS
-            print_info("Using yum package manager")
-            os.system("sudo yum update -y")
-            packages = [
-                "python3",
-                "python3-pip",
-                "nmap",
-                "net-tools",
-                "curl"
-            ]
-            for package in packages:
-                # Check if package is already installed
-                check_result = subprocess.run(["rpm", "-q", package], 
-                                            capture_output=True, text=True)
-                if check_result.returncode == 0:
-                    print_info(f"{package} is already installed. Skipping...")
-                    continue
-                
-                print_info(f"Installing {package}...")
-                os.system(f"sudo yum install {package} -y")
-        elif package_manager == "dnf":
-            # Fedora
-            print_info("Using dnf package manager")
-            os.system("sudo dnf update -y")
-            packages = [
-                "python3",
-                "python3-pip",
-                "nmap",
-                "net-tools",
-                "curl"
-            ]
-            for package in packages:
-                # Check if package is already installed
-                check_result = subprocess.run(["rpm", "-q", package], 
-                                            capture_output=True, text=True)
-                if check_result.returncode == 0:
-                    print_info(f"{package} is already installed. Skipping...")
-                    continue
-                
-                print_info(f"Installing {package}...")
-                os.system(f"sudo dnf install {package} -y")
-        elif package_manager == "pacman":
-            # Arch Linux
-            print_info("Using pacman package manager")
-            os.system("sudo pacman -Syu --noconfirm")
-            packages = [
-                "python3",
-                "python-pip",
-                "nmap",
-                "net-tools",
-                "curl"
-            ]
-            for package in packages:
-                # Check if package is already installed
-                check_result = subprocess.run(["pacman", "-Q", package], 
-                                            capture_output=True, text=True)
-                if check_result.returncode == 0:
-                    print_info(f"{package} is already installed. Skipping...")
-                    continue
-                
-                print_info(f"Installing {package}...")
-                os.system(f"sudo pacman -S {package} --noconfirm")
+        subprocess.run(update_cmd, shell=True, check=True)
+        print_success("Package lists updated")
+    except subprocess.CalledProcessError:
+        print_warning("Failed to update package lists")
+    
+    # Install packages
+    for pkg_name, check_cmd in packages.get(pkg_manager, []):
+        print_info(f"Checking {pkg_name}...")
+        if check_package_installed(pkg_name, f"which {check_cmd}"):
+            print_success(f"{pkg_name} is already installed")
         else:
-            print_warning("Unsupported package manager. Please install packages manually:")
-            print_info("  - Python 3.6+")
-            print_info("  - pip")
-            print_info("  - nmap")
-            print_info("  - net-tools")
-            print_info("  - curl")
-            return False
-        
-        # Install Python packages
-        python_packages = [
-            "netifaces"
-        ]
-        
-        print_info("Installing Python packages...")
-        for package in python_packages:
-            print_info(f"Installing Python package {package}...")
-            os.system("pip3 install " + package)
-        
-        print_success("Linux setup completed!")
-        return True
-        
-    except Exception as e:
-        print_error(f"Error during Linux setup: {e}")
-        return False
+            print_info(f"Installing {pkg_name}...")
+            try:
+                result = subprocess.run(f"{install_cmd} {pkg_name}", 
+                                      shell=True, capture_output=True, text=True)
+                if result.returncode == 0:
+                    print_success(f"{pkg_name} installed successfully")
+                else:
+                    print_error(f"Failed to install {pkg_name}: {result.stderr}")
+            except Exception as e:
+                print_error(f"Error installing {pkg_name}: {e}")
 
 def setup_macos():
-    """Setup dependencies for macOS environment."""
-    print_info("Setting up dependencies for macOS...")
+    """Setup dependencies on macOS"""
+    print_header("MACOS SETUP")
+    
+    # Check if Homebrew is installed
+    if not shutil.which("brew"):
+        print_info("Installing Homebrew...")
+        try:
+            install_cmd = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+            subprocess.run(install_cmd, shell=True, check=True)
+            print_success("Homebrew installed successfully")
+        except subprocess.CalledProcessError:
+            print_error("Failed to install Homebrew")
+            return
+    
+    packages = [
+        ("nmap", "nmap"),
+        ("metasploit", "msfconsole")
+    ]
+    
+    # Update Homebrew
+    print_info("Updating Homebrew...")
+    try:
+        subprocess.run("brew update", shell=True, check=True)
+        print_success("Homebrew updated")
+    except subprocess.CalledProcessError:
+        print_warning("Failed to update Homebrew")
+    
+    # Install packages
+    for pkg_name, check_cmd in packages:
+        print_info(f"Checking {pkg_name}...")
+        if check_package_installed(pkg_name, f"which {check_cmd}"):
+            print_success(f"{pkg_name} is already installed")
+        else:
+            print_info(f"Installing {pkg_name}...")
+            try:
+                result = subprocess.run(f"brew install {pkg_name}", 
+                                      shell=True, capture_output=True, text=True)
+                if result.returncode == 0:
+                    print_success(f"{pkg_name} installed successfully")
+                else:
+                    print_error(f"Failed to install {pkg_name}: {result.stderr}")
+            except Exception as e:
+                print_error(f"Error installing {pkg_name}: {e}")
+
+def setup_termux():
+    """Setup dependencies on Termux"""
+    print_header("TERMUX SETUP")
+    
+    packages = ["nmap", "metasploit"]
+    
+    # Update package lists
+    print_info("Updating package lists...")
+    try:
+        subprocess.run("pkg update -y", shell=True, check=True)
+        print_success("Package lists updated")
+    except subprocess.CalledProcessError:
+        print_warning("Failed to update package lists")
+    
+    # Install packages
+    for pkg_name in packages:
+        print_info(f"Installing {pkg_name}...")
+        try:
+            result = subprocess.run(f"pkg install {pkg_name} -y", 
+                                  shell=True, capture_output=True, text=True)
+            if result.returncode == 0:
+                print_success(f"{pkg_name} installed successfully")
+            else:
+                print_error(f"Failed to install {pkg_name}: {result.stderr}")
+        except Exception as e:
+            print_error(f"Error installing {pkg_name}: {e}")
+
+def install_python_packages():
+    """Install required Python packages"""
+    print_header("PYTHON PACKAGES SETUP")
+    
+    packages = [
+        "scapy",
+        "python-nmap",
+        "requests"
+    ]
+    
+    for pkg in packages:
+        print_info(f"Installing {pkg}...")
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", pkg], 
+                          check=True, capture_output=True)
+            print_success(f"{pkg} installed successfully")
+        except subprocess.CalledProcessError as e:
+            print_error(f"Failed to install {pkg}: {e}")
+
+def check_for_updates():
+    """Check for updates from the GitHub repository and update if needed."""
+    print_header("CHECK FOR UPDATES")
     
     try:
-        # Check if Homebrew is installed
+        # GitHub repository information
+        repo_owner = "XmaX"
+        repo_name = "termux"
+        
+        print_info(f"Checking for updates from GitHub repository: {repo_owner}/{repo_name}")
+        
+        # Check if git is available
         try:
-            result = subprocess.run(["brew", "--version"], capture_output=True, text=True)
-            if result.returncode == 0:
-                print_info("Homebrew detected")
-                use_brew = True
-            else:
-                use_brew = False
-        except FileNotFoundError:
-            use_brew = False
+            subprocess.run(["git", "--version"], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print_error("Git is not installed or not available in PATH.")
+            print_info("Please install Git to enable update functionality.")
+            return
         
-        if use_brew:
-            # Install packages using Homebrew
-            packages = [
-                "python3",
-                "nmap",
-                "curl"
-            ]
+        # Get current commit hash
+        try:
+            current_commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            current_hash = current_commit.stdout.strip()
+            print_info(f"Current commit: {current_hash[:8]}")
+        except subprocess.CalledProcessError:
+            print_error("Not a git repository or git repository not initialized.")
+            print_info("Please clone the repository using 'git clone' to enable update functionality.")
+            return
+        
+        # Fetch latest changes from remote
+        print_info("Fetching latest changes from remote repository...")
+        try:
+            subprocess.run(["git", "fetch"], check=True)
+        except subprocess.CalledProcessError:
+            print_error("Failed to fetch updates from remote repository.")
+            return
+        
+        # Get latest commit hash from remote
+        try:
+            latest_commit = subprocess.run(
+                ["git", "rev-parse", f"origin/main"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            latest_hash = latest_commit.stdout.strip()
+            print_info(f"Latest commit:  {latest_hash[:8]}")
+        except subprocess.CalledProcessError:
+            print_error("Failed to get latest commit information.")
+            return
+        
+        # Compare commits
+        if current_hash == latest_hash:
+            print_success("Your repository is up to date!")
+            return
+        
+        print_warning("Updates are available!")
+        print_info(f"Current: {current_hash[:8]}")
+        print_info(f"Latest:  {latest_hash[:8]}")
+        
+        # Ask user if they want to update
+        choice = input("\n[?] Do you want to update to the latest version? (y/N): ").strip().lower()
+        if choice != 'y':
+            print_info("Update cancelled by user.")
+            return
+        
+        # Perform the update
+        print_info("Updating repository...")
+        try:
+            # Stash any local changes
+            subprocess.run(["git", "stash"], check=True)
             
-            print_info("Checking and installing packages with Homebrew...")
-            for package in packages:
-                # Check if package is already installed
-                try:
-                    result = subprocess.run(["brew", "list", package], 
-                                          capture_output=True, text=True, timeout=30)
-                    if result.returncode == 0:
-                        print_info(f"{package} is already installed. Skipping...")
-                        continue
-                except Exception:
-                    # If check fails, proceed with installation
-                    pass
-                
-                print_info(f"Installing {package}...")
-                os.system(f"brew install {package}")
-        else:
-            print_warning("Homebrew not found. Please install it first:")
-            print_info("  /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
-            print_info("Then run this setup again.")
-            return False
-        
-        # Install Python packages
-        python_packages = [
-            "netifaces"
-        ]
-        
-        print_info("Installing Python packages...")
-        for package in python_packages:
-            print_info(f"Installing Python package {package}...")
-            os.system("pip3 install " + package)
-        
-        print_success("macOS setup completed!")
-        return True
-        
+            # Pull the latest changes
+            subprocess.run(["git", "pull", "origin", "main"], check=True)
+            
+            # Apply stashed changes if any
+            subprocess.run(["git", "stash", "pop"], check=False)
+            
+            print_success("Repository updated successfully!")
+            print_info("Restart the toolkit to use the updated version.")
+            
+        except subprocess.CalledProcessError as e:
+            print_error(f"Failed to update repository: {e}")
+            print_info("You may need to manually resolve conflicts.")
+            
     except Exception as e:
-        print_error(f"Error during macOS setup: {e}")
-        return False
+        print_error(f"Error during update check: {e}")
 
 def main():
-    """Main setup function."""
+    """Main setup function"""
     print_header("NETWORK SECURITY TOOLKIT SETUP")
     
-    try:
-        # Detect the operating system
-        system = platform.system().lower()
-        print_info(f"Detected OS: {system}")
+    system = platform.system().lower()
+    print_info(f"Detected system: {system}")
+    
+    # Menu for setup options
+    while True:
+        print("\nSetup Options:")
+        print("1. Full Setup (Install all dependencies)")
+        print("2. Install Python Packages Only")
+        print("3. Check for Updates")
+        print("0. Exit")
         
-        # Check if running on Termux
-        is_termux = detect_termux()
+        choice = input("\nEnter your choice: ").strip()
         
-        if is_termux:
-            print_info("Running on Termux")
-            success = setup_termux()
-        elif system == "windows":
-            print_info("Running on Windows")
-            success = setup_windows()
-        elif system == "linux":
-            print_info("Running on Linux")
-            success = setup_linux()
-        elif system == "darwin":
-            print_info("Running on macOS")
-            success = setup_macos()
+        if choice == "1":
+            if system == "windows":
+                setup_windows()
+            elif system == "linux":
+                # Check if running on Termux
+                if "com.termux" in os.environ.get("PREFIX", ""):
+                    setup_termux()
+                else:
+                    setup_linux()
+            elif system == "darwin":  # macOS
+                setup_macos()
+            else:
+                print_error(f"Unsupported system: {system}")
+            
+            install_python_packages()
+            print_success("Setup completed!")
+            
+        elif choice == "2":
+            install_python_packages()
+            print_success("Python packages installed!")
+            
+        elif choice == "3":
+            check_for_updates()
+            
+        elif choice == "0":
+            print_info("Exiting setup...")
+            break
+            
         else:
-            print_error(f"Unsupported operating system: {system}")
-            return False
-        
-        if success:
-            print_success("Setup completed successfully!")
-            print_info("You can now run the toolkit with: python main.py")
-        else:
-            print_error("Setup completed with errors.")
-        
-        return success
-        
-    except Exception as e:
-        print_error(f"Error during setup: {e}")
-        return False
+            print_error("Invalid choice. Please try again.")
 
 if __name__ == "__main__":
     main()

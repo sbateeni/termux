@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""
+Network Scanner Module
+Discovers devices on the local network and retrieves their IP and MAC addresses.
+"""
+
+import subprocess
+import socket
+import struct
+import threading
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+import re
+from typing import List, Dict, Tuple, Optional
+
+class NetworkScanner:
+    def __init__(self):
+        self.devices = []
+        self.local_ip = self._get_local_ip()
+        self.network_range = self._get_network_range()
+    
+    def _get_local_ip(self) -> str:
+        """Get the local IP address of the machine."""
+        try:
+            # Try multiple methods to get local IP
+            # Method 1: Connect to external server
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))
+                return s.getsockname()[0]
+        except Exception:
+            try:
+                # Method 2: Use hostname resolution
+                import subprocess
+                if os.name == 'nt':  # Windows
+                    result = subprocess.run(['ipconfig'], capture_output=True, text=True)
+                    lines = result.stdout.split('\n')
+                    for line in lines:
+                        if 'IPv4' in line and '192.168.' in line:
+                            ip = line.split(':')[-1].strip()
+                            return ip
+                else:  # Unix/Linux/Mac
+                    result = subprocess.run(['hostname', '-I'], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        return result.stdout.strip().split()[0]
+            except Exception:
+                pass
+        return "192.168.1.1"  # Fallback
+    
+    def _get_network_range(self) -> str:
+        """Calculate network range based on local IP."""
+        ip_parts = self.local_ip.split('.')
+        return f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.0/24"
+    
+    def _ping_host(self, ip: str) -> bool:
+        """Ping a single host to check if it's alive."""
+        try:
+            # Use ping command appropriate for Windows
+            result = subprocess.run(
+                ["ping", "-n", "1", "-w", "1000", ip],
+                capture_output=True,
+                text=True,
+                timeout=3
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+    
+    def _get_mac_address(self, ip: str) -> Optional[str]:
+        """Get MAC address for a given IP using ARP table or other methods."""
+        try:
+            # Method 1: Use arp command to get MAC address
+            if os.name == 'nt':  # Windows
+                result = subprocess.run(
+                    ["arp", "-a", ip],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+            else:  # Unix/Linux/Mac
+                result = subprocess.run(
+                    ["arp", ip],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+            
+            if result.returncode == 0:
+                # Parse ARP output for MAC address
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    if ip in line:
+                        # Look for MAC address pattern (xx-xx-xx-xx-xx-xx)
+                        mac_match = re.search(r'([0-9a-fA-F]{2}[-:]){5}[0-9a-fA-F]{2}', line)
+                        if mac_match:
+                            return mac_match.group(0).replace('-', ':').upper()
+            
+            # Method 2: Try alternative approach for Windows
+            if os.name == 'nt':
+                try:
+                    result = subprocess.run(
+                        ["getmac", "/v"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        lines = result.stdout.strip().split('\n')
+                        for line in lines:
+                            if ip in line:
+                                # Look for MAC address pattern
+                                mac_match = re.search(r'([0-9a-fA-F]{2}[-]){5}[0-9a-fA-F]{2}', line)
+                                if mac_match:
+                                    return mac_match.group(0).replace('-', ':').upper()
+                except Exception:
+                    pass
+            
+            return None
+        except Exception:
+            return None
+    
+    def _get_hostname(self, ip: str) -> str:
+        """Get hostname for a given IP address."""
+        try:
+            hostname = socket.gethostbyaddr(ip)[0]
+            return hostname
+        except Exception:
+            return "Unknown"
+    
+    def _scan_single_ip(self, ip: str) -> Optional[Dict]:
+        """Scan a single IP address and return device info if alive."""
+        if self._ping_host(ip):
+            print(f"[+] Found device: {ip}")
+            
+            # Get MAC address (might take a moment)
+            mac = self._get_mac_address(ip)
+            hostname = self._get_hostname(ip)
+            
+            return {
+                'ip': ip,
+                'mac': mac or 'Unknown',
+                'hostname': hostname,
+                'status': 'alive'
+            }
+        return None
+    
+    def scan_network(self, max_threads: int = 50) -> List[Dict]:
+        """
+        Scan the entire network range for alive devices.
+        
+        Args:
+            max_threads: Maximum number of concurrent threads
+            
+        Returns:
+            List of dictionaries containing device information
+        """
+        print(f"[*] Scanning network range: {self.network_range}")
+        print(f"[*] Local IP: {self.local_ip}")
+        print("[*] Starting network scan...")
+        
+        # Generate IP range
+        base_ip = self.local_ip.rsplit('.', 1)[0]
+        ip_list = [f"{base_ip}.{i}" for i in range(1, 255)]
+        
+        self.devices = []
+        
+        # Use ThreadPoolExecutor for concurrent scanning
+        with ThreadPoolExecutor(max_workers=max_threads) as executor:
+            # Submit all IP scanning tasks
+            future_to_ip = {executor.submit(self._scan_single_ip, ip): ip for ip in ip_list}
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_ip):
+                result = future.result()
+                if result:
+                    self.devices.append(result)
+        
+        # Sort devices by IP
+        self.devices.sort(key=lambda x: socket.inet_aton(x['ip']))
+        
+        print(f"[+] Scan complete! Found {len(self.devices)} devices")
+        return self.devices
+    
+    def display_devices(self) -> None:
+        """Display discovered devices in a formatted table."""
+        if not self.devices:
+            print("[-] No devices found")
+            return
+        
+        print("\n" + "="*80)
+        print("DISCOVERED NETWORK DEVICES")
+        print("="*80)
+        print(f"{'#':<3} {'IP Address':<15} {'MAC Address':<18} {'Hostname':<25} {'Status'}")
+        print("-"*80)
+        
+        for i, device in enumerate(self.devices, 1):
+            print(f"{i:<3} {device['ip']:<15} {device['mac']:<18} {device['hostname']:<25} {device['status']}")
+        
+        print("-"*80)
+        print(f"Total devices found: {len(self.devices)}")
+    
+    def get_devices(self) -> List[Dict]:
+        """Return the list of discovered devices."""
+        return self.devices
+    
+    def save_results(self, filename: str = "network_scan_results.txt") -> None:
+        """Save scan results to a file."""
+        try:
+            with open(filename, 'w') as f:
+                f.write("Network Scan Results\n")
+                f.write("===================\n")
+                f.write(f"Scan Time: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Network Range: {self.network_range}\n")
+                f.write(f"Local IP: {self.local_ip}\n\n")
+                
+                for device in self.devices:
+                    f.write(f"IP: {device['ip']}\n")
+                    f.write(f"MAC: {device['mac']}\n")
+                    f.write(f"Hostname: {device['hostname']}\n")
+                    f.write(f"Status: {device['status']}\n")
+                    f.write("-" * 30 + "\n")
+            
+            print(f"[+] Results saved to {filename}")
+        except Exception as e:
+            print(f"[-] Error saving results: {e}")
+
+def main():
+    """Test the network scanner module."""
+    scanner = NetworkScanner()
+    
+    print("Network Scanner Test")
+    print("===================")
+    
+    # Perform network scan
+    devices = scanner.scan_network()
+    
+    # Display results
+    scanner.display_devices()
+    
+    # Save results
+    scanner.save_results()
+
+if __name__ == "__main__":
+    main()

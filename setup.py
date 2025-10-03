@@ -61,25 +61,71 @@ def setup_windows():
         print_info("Please run this script as Administrator for full functionality.")
         input("Press Enter to continue anyway (some features may not work)...")
     
-    packages = [
-        ("Nmap", "choco install nmap -y", "nmap --version"),
-        ("Metasploit", "choco install metasploit -y", "msfconsole --version")
-    ]
-    
-    for name, install_cmd, check_cmd in packages:
-        print_info(f"Checking {name}...")
-        if check_package_installed(name, check_cmd):
-            print_success(f"{name} is already installed")
-        else:
-            print_info(f"Installing {name}...")
+    try:
+        # Check if Chocolatey is installed
+        choco_installed = shutil.which("choco") is not None
+        
+        if not choco_installed:
+            print_info("Installing Chocolatey...")
             try:
-                result = subprocess.run(install_cmd, shell=True, capture_output=True, text=True)
+                choco_install_cmd = (
+                    'Set-ExecutionPolicy Bypass -Scope Process -Force; '
+                    '[System.Net.ServicePointManager]::SecurityProtocol = '
+                    '[System.Net.ServicePointManager]::SecurityProtocol -bor 3072; '
+                    'iex ((New-Object System.Net.WebClient).DownloadString('
+                    '\'https://community.chocolatey.org/install.ps1\'))'
+                )
+                result = subprocess.run(
+                    ["powershell", "-Command", choco_install_cmd],
+                    capture_output=True, text=True, shell=True
+                )
                 if result.returncode == 0:
-                    print_success(f"{name} installed successfully")
+                    print_success("Chocolatey installed successfully")
+                    choco_installed = True
                 else:
-                    print_error(f"Failed to install {name}: {result.stderr}")
+                    print_error(f"Failed to install Chocolatey: {result.stderr}")
             except Exception as e:
-                print_error(f"Error installing {name}: {e}")
+                print_error(f"Error installing Chocolatey: {e}")
+        
+        packages = [
+            ("Nmap", "choco install nmap -y", "nmap --version"),
+            ("Metasploit", "choco install metasploit -y", "msfconsole --version")
+        ]
+        
+        for name, install_cmd, check_cmd in packages:
+            print_info(f"Checking {name}...")
+            if check_package_installed(name, check_cmd):
+                print_success(f"{name} is already installed")
+            else:
+                print_info(f"Installing {name}...")
+                try:
+                    result = subprocess.run(install_cmd, shell=True, capture_output=True, text=True)
+                    if result.returncode == 0:
+                        print_success(f"{name} installed successfully")
+                    else:
+                        print_error(f"Failed to install {name}: {result.stderr}")
+                        if name == "Metasploit":
+                            print_info("Trying alternative installation method...")
+                            _install_metasploit_windows()
+                except Exception as e:
+                    print_error(f"Error installing {name}: {e}")
+                    if name == "Metasploit":
+                        print_info("Trying alternative installation method...")
+                        _install_metasploit_windows()
+    except Exception as e:
+        print_error(f"Error during Windows setup: {e}")
+
+def _install_metasploit_windows():
+    """Install Metasploit on Windows using alternative method"""
+    try:
+        print_info("Attempting alternative Metasploit installation...")
+        print_warning("Automatic download of Metasploit installer is not implemented due to dynamic URLs.")
+        print_info("Please download the Metasploit installer manually from:")
+        print_info("https://www.metasploit.com/download/")
+        print_info("After downloading, run the installer as Administrator.")
+        print_info("Make sure to add Metasploit to your PATH during installation.")
+    except Exception as e:
+        print_error(f"Error during Metasploit installation: {e}")
 
 def setup_linux():
     """Setup dependencies on Linux"""
@@ -212,17 +258,27 @@ def setup_termux():
         print_info("Installing Metasploit Framework...")
         print_info("This may take a while. Please be patient...")
         
-        # Download and run the Metasploit installation script
-        msf_install_script = "https://github.com/gushmazuko/metasploit_in_termux/raw/master/metasploit.sh"
-        subprocess.run(["pkg", "install", "wget", "-y"], check=True)
-        subprocess.run(["wget", msf_install_script], check=True)
-        subprocess.run(["chmod", "+x", "metasploit.sh"], check=True)
-        subprocess.run(["./metasploit.sh"], check=True)
-        
-        print_success("Metasploit Framework installed successfully")
-        print_info("To start Metasploit, run: msfconsole")
-        print_info("If you encounter issues, try:")
-        print_info("curl -fsSL https://kutt.it/msf | bash")
+        # Try the automated curl method first
+        try:
+            subprocess.run(["pkg", "install", "curl", "-y"], check=True)
+            curl_result = subprocess.run(
+                ["curl", "-fsSL", "https://kutt.it/msf"],
+                capture_output=True, text=True
+            )
+            if curl_result.returncode == 0:
+                # Save the script and execute it
+                with open("metasploit_installer.sh", "w") as f:
+                    f.write(curl_result.stdout)
+                subprocess.run(["chmod", "+x", "metasploit_installer.sh"], check=True)
+                subprocess.run(["bash", "metasploit_installer.sh"], check=True)
+                print_success("Metasploit Framework installed successfully")
+            else:
+                # Fallback to manual installation
+                _install_metasploit_termux()
+        except Exception as e:
+            print_warning(f"Automated installation failed: {e}")
+            print_info("Trying manual installation...")
+            _install_metasploit_termux()
             
     except subprocess.CalledProcessError as e:
         print_error(f"Error installing packages in Termux: {e}")
@@ -230,6 +286,37 @@ def setup_termux():
         print_info("curl -fsSL https://kutt.it/msf | bash")
     except Exception as e:
         print_error(f"Unexpected error in Termux setup: {e}")
+
+def _install_metasploit_termux():
+    """Install Metasploit on Termux using the gushmazuko script"""
+    try:
+        print_info("Installing Metasploit using gushmazuko script...")
+        
+        # Download and run the Metasploit installation script
+        msf_install_script = "https://github.com/gushmazuko/metasploit_in_termux/raw/master/metasploit.sh"
+        
+        # Install required dependencies first
+        subprocess.run(["pkg", "install", "wget", "curl", "git", "ruby", "ruby-dev", "libffi-dev", "ncurses-utils", "-y"], check=True)
+        
+        # Download the script
+        subprocess.run(["wget", msf_install_script], check=True)
+        subprocess.run(["chmod", "+x", "metasploit.sh"], check=True)
+        
+        # Run the installation script
+        print_info("Running Metasploit installation script. This may take 10-15 minutes...")
+        subprocess.run(["./metasploit.sh"], check=True)
+        
+        print_success("Metasploit Framework installed successfully")
+        print_info("To start Metasploit, run: msfconsole")
+        
+    except subprocess.CalledProcessError as e:
+        print_error(f"Error installing Metasploit in Termux: {e}")
+        print_info("Try manually installing Metasploit with:")
+        print_info("curl -fsSL https://kutt.it/msf | bash")
+    except Exception as e:
+        print_error(f"Unexpected error installing Metasploit in Termux: {e}")
+        print_info("Try manually installing Metasploit with:")
+        print_info("curl -fsSL https://kutt.it/msf | bash")
 
 def install_python_packages():
     """Install required Python packages"""

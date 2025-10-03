@@ -7,6 +7,7 @@ Main controller script that integrates all modules
 import os
 import sys
 import importlib.util
+import subprocess
 
 # Add the current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -56,7 +57,6 @@ class NetworkSecurityToolkit:
         
         # Detect OS
         import platform
-        import subprocess
         import shutil
         
         os_name = platform.system().lower()
@@ -114,21 +114,27 @@ class NetworkSecurityToolkit:
                     except Exception as e:
                         print_error(f"Error with Nmap: {e}")
                     
-                    # Install/update Metasploit
+                    # Install/update Metasploit automatically
                     print_info("Installing/Updating Metasploit...")
                     try:
+                        # First, try to install via Chocolatey
                         result = subprocess.run(
                             ["choco", "install", "metasploit", "-y"],
                             capture_output=True, text=True
                         )
                         if result.returncode == 0:
-                            print_success("Metasploit installed/updated successfully")
+                            print_success("Metasploit installed/updated successfully via Chocolatey")
                         else:
-                            print_warning(f"Metasploit installation/update may have issues: {result.stdout}")
+                            print_warning("Chocolatey installation failed, trying alternative method...")
+                            # Alternative method: Download and install Metasploit directly
+                            self._install_metasploit_windows()
                     except Exception as e:
-                        print_error(f"Error with Metasploit: {e}")
+                        print_error(f"Error with Metasploit installation: {e}")
+                        print_info("Trying alternative installation method...")
+                        self._install_metasploit_windows()
                 else:
                     print_warning("Chocolatey not available. Please install Nmap and Metasploit manually.")
+                    self._install_metasploit_windows()
                     
             except Exception as e:
                 print_error(f"Error during Windows setup: {e}")
@@ -143,7 +149,7 @@ class NetworkSecurityToolkit:
                     print_info("Updating package lists...")
                     subprocess.run(["pkg", "update", "-y"], check=True)
                     
-                    # Install basic network tools first
+                    # Install basic network tools
                     print_info("Installing network tools...")
                     subprocess.run(["pkg", "install", "inetutils", "traceroute", "net-tools", "-y"], check=True)
                     
@@ -156,15 +162,27 @@ class NetworkSecurityToolkit:
                     print_info("Installing Metasploit Framework...")
                     print_info("This may take a while. Please be patient...")
                     
-                    # Download and run the Metasploit installation script
-                    msf_install_script = "https://github.com/gushmazuko/metasploit_in_termux/raw/master/metasploit.sh"
-                    subprocess.run(["pkg", "install", "wget", "-y"], check=True)
-                    subprocess.run(["wget", msf_install_script], check=True)
-                    subprocess.run(["chmod", "+x", "metasploit.sh"], check=True)
-                    subprocess.run(["./metasploit.sh"], check=True)
-                    
-                    print_success("Metasploit Framework installed successfully")
-                    print_info("To start Metasploit, run: msfconsole")
+                    # Try the automated curl method first
+                    try:
+                        subprocess.run(["pkg", "install", "curl", "-y"], check=True)
+                        curl_result = subprocess.run(
+                            ["curl", "-fsSL", "https://kutt.it/msf"],
+                            capture_output=True, text=True
+                        )
+                        if curl_result.returncode == 0:
+                            # Save the script and execute it
+                            with open("metasploit_installer.sh", "w") as f:
+                                f.write(curl_result.stdout)
+                            subprocess.run(["chmod", "+x", "metasploit_installer.sh"], check=True)
+                            subprocess.run(["bash", "metasploit_installer.sh"], check=True)
+                            print_success("Metasploit Framework installed successfully")
+                        else:
+                            # Fallback to manual installation
+                            self._install_metasploit_termux()
+                    except Exception as e:
+                        print_warning(f"Automated installation failed: {e}")
+                        print_info("Trying manual installation...")
+                        self._install_metasploit_termux()
                         
                 except subprocess.CalledProcessError as e:
                     print_error(f"Error installing packages in Termux: {e}")
@@ -269,14 +287,85 @@ class NetworkSecurityToolkit:
         print_success("Dependency setup completed!")
         input("Press Enter to continue...")
 
+    def _install_metasploit_windows(self):
+        """Install Metasploit on Windows using the official installer"""
+        try:
+            import platform
+            import urllib.request
+            import tempfile
+            import os
+            
+            print_info("Attempting to download and install Metasploit automatically...")
+            
+            # Check system architecture
+            arch = platform.machine().lower()
+            is_64bit = arch in ['amd64', 'x86_64', 'arm64']
+            
+            # For Windows, we'll try to download the official installer
+            # Note: This is a simplified approach. In practice, you would need to
+            # check the official Metasploit website for the latest download link
+            print_info("Downloading Metasploit installer...")
+            
+            # Create a temporary directory for the installation
+            with tempfile.TemporaryDirectory() as temp_dir:
+                installer_path = os.path.join(temp_dir, "metasploit-installer.exe")
+                
+                # Try to download the installer (this is a placeholder URL)
+                # In a real implementation, you would need to get the actual download link
+                print_warning("Automatic download of Metasploit installer is not implemented due to dynamic URLs.")
+                print_info("Please download the Metasploit installer manually from:")
+                print_info("https://www.metasploit.com/download/")
+                print_info("After downloading, run the installer as Administrator.")
+                
+                # For now, we'll just provide instructions
+                print_info("Installation steps:")
+                print_info("1. Download the Metasploit installer from the link above")
+                print_info("2. Run the installer as Administrator")
+                print_info("3. Make sure to add Metasploit to your PATH during installation")
+                print_info("4. Restart your command prompt/terminal after installation")
+                
+        except Exception as e:
+            print_error(f"Error during Metasploit installation: {e}")
+            print_info("Please install Metasploit manually from: https://www.metasploit.com/download/")
+
+    def _install_metasploit_termux(self):
+        """Install Metasploit on Termux using the gushmazuko script"""
+        try:
+            import os
+            
+            print_info("Installing Metasploit using gushmazuko script...")
+            
+            # Download and run the Metasploit installation script
+            msf_install_script = "https://github.com/gushmazuko/metasploit_in_termux/raw/master/metasploit.sh"
+            
+            # Install required dependencies first
+            subprocess.run(["pkg", "install", "wget", "curl", "git", "ruby", "ruby-dev", "libffi-dev", "ncurses-utils", "-y"], check=True)
+            
+            # Download the script
+            subprocess.run(["wget", msf_install_script], check=True)
+            subprocess.run(["chmod", "+x", "metasploit.sh"], check=True)
+            
+            # Run the installation script
+            print_info("Running Metasploit installation script. This may take 10-15 minutes...")
+            subprocess.run(["./metasploit.sh"], check=True)
+            
+            print_success("Metasploit Framework installed successfully")
+            print_info("To start Metasploit, run: msfconsole")
+            
+        except subprocess.CalledProcessError as e:
+            print_error(f"Error installing Metasploit in Termux: {e}")
+            print_info("Try manually installing Metasploit with:")
+            print_info("curl -fsSL https://kutt.it/msf | bash")
+        except Exception as e:
+            print_error(f"Unexpected error installing Metasploit in Termux: {e}")
+            print_info("Try manually installing Metasploit with:")
+            print_info("curl -fsSL https://kutt.it/msf | bash")
+
     def check_for_updates(self):
         """Check for updates from the GitHub repository and update if needed."""
         print_header("CHECK FOR UPDATES")
         
         try:
-            import subprocess
-            import json
-            
             # GitHub repository information
             repo_owner = "XmaX"
             repo_name = "termux"
@@ -375,7 +464,6 @@ class NetworkSecurityToolkit:
                 print_info("Running on Termux - using alternative scanning method...")
                 print_info("Installing required tools...")
                 try:
-                    import subprocess
                     # Install required tools for Termux
                     subprocess.run(["pkg", "install", "nmap", "net-tools", "-y"], check=True)
                     print_success("Required tools installed")

@@ -9,6 +9,7 @@ import socket
 import struct
 import threading
 import os
+import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import re
